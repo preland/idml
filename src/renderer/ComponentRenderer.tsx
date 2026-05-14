@@ -51,8 +51,8 @@ function useBoundProps(bindings: any[]): Record<string, unknown> {
   const props: Record<string, unknown> = {};
   for (const binding of bindings) {
     const method = getMethod(binding.methodId);
-    if (method) {
-      props[binding.prop] = typeof method === 'function' ? method : method?.();
+    if (method && typeof method === 'function') {
+      props[binding.prop] = method;
     }
   }
   return props;

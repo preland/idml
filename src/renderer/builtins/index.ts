@@ -1,44 +1,44 @@
 import React from 'react';
+import type { ReactNode } from 'react';
 
-const Text = ({ text, children, ...props }: Record<string, any>) => (
-  <span {...props}>{text || children}</span>
-);
+interface ComponentProps {
+  [key: string]: any;
+  children?: ReactNode;
+}
 
-const Heading = ({ level = 1, text, children, ...props }: Record<string, any>) => {
-  const Tag = `h${level}` as keyof JSX.IntrinsicElements;
+const Text = ({ text, children, ...props }: ComponentProps) =>
+  React.createElement('span', props, text || children);
+
+const Heading = ({ level = 1, text, children, ...props }: ComponentProps) => {
+  const Tag = (`h${level}` as unknown) as keyof React.JSX.IntrinsicElements;
   return React.createElement(Tag, props, text || children);
 };
 
-const Button = ({ text, children, onClick, ...props }: Record<string, any>) => (
-  <button onClick={onClick} {...props}>
-    {text || children}
-  </button>
-);
+const Button = ({ text, children, onClick, ...props }: ComponentProps) =>
+  React.createElement('button', { onClick, ...props }, text || children);
 
-const Image = ({ src, alt, ...props }: Record<string, any>) => (
-  <img src={src} alt={alt || ''} {...props} />
-);
+const Image = ({ src, alt, ...props }: ComponentProps) =>
+  React.createElement('img', { src, alt: alt || '', ...props });
 
-const List = ({ items = [], children, ...props }: Record<string, any>) => (
-  <ul {...props}>
-    {items.map((item: any, i: number) => (
-      <li key={i}>{typeof item === 'string' ? item : JSON.stringify(item)}</li>
-    ))}
-    {children}
-  </ul>
-);
+const List = ({ items = [], children, ...props }: ComponentProps) =>
+  React.createElement(
+    'ul',
+    props,
+    items.map((item: any, i: number) =>
+      React.createElement('li', { key: i }, typeof item === 'string' ? item : JSON.stringify(item))
+    ),
+    children
+  );
 
-const Card = ({ children, ...props }: Record<string, any>) => (
-  <div {...props}>{children}</div>
-);
+const Card = ({ children, ...props }: ComponentProps) =>
+  React.createElement('div', props, children);
 
-const Divider = (props: Record<string, any>) => <hr {...props} />;
+const Divider = (props: ComponentProps) => React.createElement('hr', props);
 
-const Spacer = ({ ...props }: Record<string, any>) => <div {...props} />;
+const Spacer = (props: ComponentProps) => React.createElement('div', props);
 
-const Icon = ({ name, ...props }: Record<string, any>) => (
-  <span {...props}>{name || '●'}</span>
-);
+const Icon = ({ name, ...props }: ComponentProps) =>
+  React.createElement('span', props, name || '●');
 
 export const BUILTIN_COMPONENTS = {
   Text,
