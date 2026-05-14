@@ -80,9 +80,12 @@ export async function initCommand(options: { config: string; editor: boolean }) 
           `export default withUIConfig({ configPath: '${options.config}' })($1`
         );
 
-        // If it's an object, we need to close the paren
-        if (patched.includes('export default withUIConfig')) {
-          // Count open braces after 'export default withUIConfig(...) {' to find the closing brace
+        // If it wraps a variable (nextConfig), close with );
+        if (patched.includes('export default withUIConfig') && patched.includes('nextConfig;')) {
+          patched = patched.replace(/nextConfig;/, 'nextConfig);');
+        }
+        // If it wraps an object literal, close the object and paren
+        else if (patched.includes('export default withUIConfig') && patched.includes('{')) {
           const lines = patched.split('\n');
           const lastNonEmptyLine = lines[lines.length - 2]; // before any trailing newline
           if (lastNonEmptyLine?.trim() === '}') {

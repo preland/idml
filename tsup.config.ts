@@ -29,13 +29,12 @@ export default defineConfig([
   // CLI binary
   {
     entry: { cli: 'src/cli.ts' },
-    format: ['esm'],
+    format: ['cjs'],
     dts: false,
     splitting: false,
     sourcemap: false,
     platform: 'node',
     external: ['fs', 'path', 'commander'],
-    banner: { js: '#!/usr/bin/env node' },
     tsconfig: 'tsconfig.build.json',
   },
 ]);

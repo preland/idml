@@ -42,3 +42,6 @@ export type {
   MethodRegistration,
   ComponentRegistration,
 } from './renderer';
+
+// Editor
+export { EditorPage } from './editor';
