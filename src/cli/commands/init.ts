@@ -21,8 +21,8 @@ export async function initCommand(options: { config: string; editor: boolean }) 
 
   // 2. Scaffold API routes
   if (options.editor) {
-    const eventsDir = path.join(cwd, 'app', 'api', '_isd', 'events');
-    const configDir = path.join(cwd, 'app', 'api', '_isd', 'config');
+    const eventsDir = path.join(cwd, 'app', 'api', 'isd', 'events');
+    const configDir = path.join(cwd, 'app', 'api', 'isd', 'config');
 
     fs.mkdirSync(eventsDir, { recursive: true });
     fs.mkdirSync(configDir, { recursive: true });
@@ -32,22 +32,22 @@ export async function initCommand(options: { config: string; editor: boolean }) 
 
     if (!fs.existsSync(eventsRoutePath)) {
       fs.writeFileSync(eventsRoutePath, EVENTS_ROUTE_TEMPLATE, 'utf-8');
-      console.log(`✓ Created app/api/_isd/events/route.ts`);
+      console.log(`✓ Created app/api/isd/events/route.ts`);
     }
 
     if (!fs.existsSync(configRoutePath)) {
       fs.writeFileSync(configRoutePath, CONFIG_ROUTE_TEMPLATE, 'utf-8');
-      console.log(`✓ Created app/api/_isd/config/route.ts`);
+      console.log(`✓ Created app/api/isd/config/route.ts`);
     }
 
     // 3. Scaffold editor page
-    const editorDir = path.join(cwd, 'app', '_isd-editor-internal');
+    const editorDir = path.join(cwd, 'app', 'isd', 'editor');
     fs.mkdirSync(editorDir, { recursive: true });
 
     const editorPagePath = path.join(editorDir, 'page.tsx');
     if (!fs.existsSync(editorPagePath)) {
       fs.writeFileSync(editorPagePath, EDITOR_PAGE_TEMPLATE, 'utf-8');
-      console.log(`✓ Created app/_isd-editor-internal/page.tsx`);
+      console.log(`✓ Created app/isd/editor/page.tsx`);
     }
   }
 

@@ -32,11 +32,11 @@ export function withUIConfig(
           ? [
               {
                 source: '/_isd-editor',
-                destination: '/_isd-editor-internal',
+                destination: '/isd/editor',
               },
               {
                 source: '/_isd-editor/:path*',
-                destination: '/_isd-editor-internal/:path*',
+                destination: '/isd/editor/:path*',
               },
             ]
           : [];
