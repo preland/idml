@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { initCommand } from './cli/commands/init';
 
 const program = new Command();
 
@@ -15,10 +16,12 @@ program
   .option('--config <path>', 'Path for the config file', './ui.config.json')
   .option('--no-editor', 'Disable the visual editor')
   .action(async (options) => {
-    console.log('Init command coming soon. For now, manually:');
-    console.log('1. Create ui.config.json in your project root');
-    console.log('2. Import { withUIConfig } from "isd-ui/server" in next.config.ts');
-    console.log('3. Wrap your config: export default withUIConfig()(nextConfig)');
+    try {
+      await initCommand(options);
+    } catch (err) {
+      console.error('[isd-ui] Error:', err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
   });
 
 program.parse(process.argv);
