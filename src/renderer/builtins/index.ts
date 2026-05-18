@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 interface ComponentProps {
   [key: string]: any;
@@ -14,8 +15,21 @@ const Heading = ({ level = 1, text, children, ...props }: ComponentProps) => {
   return React.createElement(Tag, props, text || children);
 };
 
-const Button = ({ text, children, onClick, ...props }: ComponentProps) =>
-  React.createElement('button', { onClick, ...props }, text || children);
+const BUTTON_BASE: React.CSSProperties = {
+  border: 'none',
+  outline: 'none',
+  textDecoration: 'none',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 'inherit',
+};
+
+const Button = ({ text, children, onClick, href, style, ...props }: ComponentProps) => {
+  const merged = { ...BUTTON_BASE, ...style };
+  return href
+    ? React.createElement(Link, { href: href as string, style: merged, ...props }, text || children)
+    : React.createElement('button', { onClick, style: merged, ...props }, text || children);
+};
 
 const Image = ({ src, alt, ...props }: ComponentProps) =>
   React.createElement('img', { src, alt: alt || '', ...props });

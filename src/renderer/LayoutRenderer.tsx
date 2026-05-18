@@ -16,7 +16,15 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
   const sizeStyle = resolveSizeStyle(layout.size);
   const gapValue = layout.gap ? resolveGap(layout.gap, config.tokens.spacing) : undefined;
 
-  const containerStyle: React.CSSProperties = { ...sizeStyle };
+  const containerStyle: React.CSSProperties = {
+    ...sizeStyle,
+    // Show bounding boxes for structural Row/Col containers (not component-bound leaf cells)
+    ...(layout.componentId ? {} : { outline: '1px solid rgba(100,100,100,0.35)' }),
+    // Apply .isdw inline styles (can override sizeStyle values, e.g. height: '30vh' for scroll pages)
+    ...(layout.isdwStyle ?? {}),
+    // Prevent flex children from shrinking so percentage/vh heights are respected and scroll works
+    flexShrink: 0,
+  };
 
   let containerClass = '';
 

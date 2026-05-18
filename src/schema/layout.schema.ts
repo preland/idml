@@ -31,6 +31,7 @@ export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
         size: SizeDefSchema.optional(),
         children: z.array(LayoutDefSchema),
         componentId: z.string().optional(),
+        isdwStyle: z.record(z.string()).optional(),
       })
       .strict(),
     z
@@ -42,6 +43,7 @@ export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
         size: SizeDefSchema.optional(),
         children: z.array(LayoutDefSchema),
         componentId: z.string().optional(),
+        isdwStyle: z.record(z.string()).optional(),
       })
       .strict(),
   ])

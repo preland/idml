@@ -30,6 +30,7 @@ export interface FlexDef {
   size?: SizeDef;
   children: LayoutDef[];
   componentId?: string;
+  isdwStyle?: Record<string, string>;
 }
 
 export interface GridDef {
@@ -40,6 +41,7 @@ export interface GridDef {
   size?: SizeDef;
   children: LayoutDef[];
   componentId?: string;
+  isdwStyle?: Record<string, string>;
 }
 
 export type LayoutDef = FlexDef | GridDef;

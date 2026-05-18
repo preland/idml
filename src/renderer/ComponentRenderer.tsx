@@ -23,7 +23,16 @@ export function ComponentRenderer({
 
   if (!isVisible) return null;
 
-  const tokenStyle = resolveTokenProps(component.tokenProps, config.tokens);
+  // Block-like components fill their cell; text/heading stay natural height so
+  // the parent flex container can centre them vertically.
+  const FILL_HEIGHT = new Set(['Button', 'Image', 'Card', 'Divider', 'Spacer']);
+  const tokenStyle = {
+    width: '100%',
+    ...(FILL_HEIGHT.has(component.type) ? { height: '100%' } : {}),
+    boxSizing: 'border-box' as const,
+    ...resolveTokenProps(component.tokenProps, config.tokens),
+    ...(component.isdwStyle ?? {}),
+  };
 
   const boundProps = useBoundProps(component.bindings ?? []);
 

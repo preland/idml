@@ -4,3 +4,6 @@
 export { withUIConfig } from './next-plugin';
 export { startWatcher, stopWatcher, addSSEWriter } from './next-plugin/watcher';
 export type { UIConfigOptions } from './next-plugin';
+
+// Parser is safe to use server-side (no React dependency)
+export { parseIsdw } from './parser/isdw-parser';

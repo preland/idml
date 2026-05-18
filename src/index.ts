@@ -45,3 +45,6 @@ export type {
 
 // Editor
 export { EditorPage } from './editor';
+
+// .isdw parser
+export { parseIsdw } from './parser/isdw-parser';

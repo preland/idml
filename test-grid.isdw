@@ -1,0 +1,19 @@
+# code comments are like this
+
+
+# format of item: Name(params)[percentage height, width, anchoring] {subMembers }
+# items are arranged top to bottom, then left to right
+# this file is a simple hello world template
+
+./home
+Row(1)[50,100,top-left] {
+    Text("Hello World")[100,100,top-left]{}
+}
+Row(2)[50,100,top-left] {
+    Col(1)[100,50,top-left] {
+        Button("Hello", {})[100,100,top-left]{}
+    }
+    Col(1)[100,50,top-left] {
+        Button("World", {})[100,100,top-left]{}
+    }
+}
