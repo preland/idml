@@ -1,13 +1,18 @@
-import type { UIConfig, LayoutDef, ComponentDef, FlexDef, SizeDef } from '../types';
+import type { UIConfig, LayoutDef, ComponentDef, FlexDef, SizeDef, DataBindingDef } from '../types';
 import type { PercentageString } from '../types/layout.types';
 
 // ==================== PARSED INTERMEDIATE TYPES ====================
 
 type DimValue = number | 'auto';
 
+// An argument value in a component call. Bare identifiers become tagged strings
+// (FN_REF_PREFIX = handler, VALUE_REF_PREFIX = reactive value binding); `null`,
+// booleans, numbers and strings are literals; a `{ }` block is a children marker.
+type IsdwArg = string | number | boolean | null | Record<string, unknown>;
+
 interface ParsedItem {
   name: string;
-  args: Array<string | number | Record<string, unknown>>;
+  args: IsdwArg[];
   height: DimValue;
   width: DimValue;
   anchor: string;
@@ -23,7 +28,7 @@ interface ParsedPage {
 
 interface StyleEntry {
   baseType: string;
-  defaultArgs: Array<string | number | Record<string, unknown>>;
+  defaultArgs: IsdwArg[];
   style: Record<string, string>;
 }
 
@@ -43,7 +48,9 @@ type TokenType =
   | 'RBRACKET'
   | 'LBRACE'
   | 'RBRACE'
-  | 'COMMA';
+  | 'COMMA'
+  | 'VALUE_REF'
+  | 'MODEL_REF';
 
 interface Token {
   type: TokenType;
@@ -75,10 +82,10 @@ function tokenize(source: string): Token[] {
   while (i < stripped.length) {
     if (/\s/.test(stripped[i])) { i++; continue; }
 
-    // Route: ./identifier
+    // Route: ./segment or ./segment/segment (multi-segment routes supported)
     if (stripped[i] === '.' && stripped[i + 1] === '/') {
       let j = i + 2;
-      while (j < stripped.length && /[\w-]/.test(stripped[j])) j++;
+      while (j < stripped.length && /[\w/-]/.test(stripped[j])) j++;
       tokens.push({ type: 'ROUTE', value: '/' + stripped.slice(i + 2, j) });
       i = j;
       continue;
@@ -89,6 +96,28 @@ function tokenize(source: string): Token[] {
       let j = i + 1;
       while (j < stripped.length && /[0-9a-fA-F]/.test(stripped[j])) j++;
       tokens.push({ type: 'COLOR', value: stripped.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    // Reactive value reference: @methodName or @item.field or @obj.field — binds a
+    // prop to a live value. A dotted path's first segment is either the reserved
+    // `item` (current repeat row) or a registered method; later segments index
+    // into the result. A bare identifier (no @) is a handler instead.
+    if (stripped[i] === '@' && /[a-zA-Z_]/.test(stripped[i + 1] ?? '')) {
+      let j = i + 1;
+      while (j < stripped.length && /[\w.-]/.test(stripped[j])) j++;
+      tokens.push({ type: 'VALUE_REF', value: stripped.slice(i + 1, j) });
+      i = j;
+      continue;
+    }
+
+    // Two-way model reference: ~stateName — binds an input's value to a form-state
+    // cell (read + write). Used on form inputs, e.g. Input(~email).
+    if (stripped[i] === '~' && /[a-zA-Z_]/.test(stripped[i + 1] ?? '')) {
+      let j = i + 1;
+      while (j < stripped.length && /[\w-]/.test(stripped[j])) j++;
+      tokens.push({ type: 'MODEL_REF', value: stripped.slice(i + 1, j) });
       i = j;
       continue;
     }
@@ -173,11 +202,28 @@ function applyStyleProp(key: string, val: string, result: Record<string, string>
 
 // Prefix added to bare-identifier args so callers can distinguish them from string values.
 const FN_REF_PREFIX = '\x00fn:';
+// Prefix for `@method` value references — a prop bound to a method's live return value.
+const VALUE_REF_PREFIX = '\x00val:';
+// Prefix for `~name` model references — a two-way binding to a form-state cell.
+const MODEL_REF_PREFIX = '\x00model:';
+
+// Names that resolve to builtins (renderer-provided) or layout primitives, so an
+// `import` of them needn't be defined in the target file. Kept here (rather than
+// importing from the renderer) to preserve the parser/renderer separation.
+const BUILTIN_NAMES = new Set([
+  'Text', 'Heading', 'Button', 'Image', 'List', 'Card', 'Divider', 'Spacer',
+  'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form',
+  'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
+]);
 
 class IsdwParser {
   private tokens: Token[];
   private pos = 0;
   styleRegistry: Map<string, StyleEntry> = new Map();
+  // Reusable component definitions: name -> body template (item list). A `define`
+  // block registers one; using the name as an item expands the body (macro-style),
+  // substituting the call's children at the `Children` marker. See convertItem.
+  defRegistry: Map<string, ParsedItem[]> = new Map();
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -194,10 +240,10 @@ class IsdwParser {
     return t;
   }
 
-  // Entry point. resolve() is called for style-file imports (.isdw).
+  // Entry point. resolve() is called to load imported .isdw files.
   parseFile(resolve?: (path: string) => string): ParsedPage[] {
     this.parseImports(resolve);
-    this.parseStyleDefs();
+    this.parseTopDecls();
 
     const pages: ParsedPage[] = [];
     while (this.peek()) {
@@ -213,6 +259,16 @@ class IsdwParser {
 
       const items: ParsedItem[] = [];
       while (this.peek() && this.peek()?.type !== 'ROUTE') {
+        const t = this.peek();
+        // Imports / definitions may appear anywhere in a file — including after
+        // the route line (a natural "this is the /x page, and it needs these"
+        // ordering). Process them into the shared registries and continue.
+        if (t?.type === 'IDENT' && t.value === 'import') { this.parseImports(resolve); continue; }
+        if (t?.type === 'IDENT' && t.value === 'define') { this.parseDefinition(); continue; }
+        if (t?.type === 'IDENT' && this.peek(1)?.type === 'COLON' && this.peek(2)?.type === 'IDENT') {
+          this.parseStyleDefs();
+          continue;
+        }
         items.push(this.parseItem());
       }
       pages.push({ route, scroll, items });
@@ -220,31 +276,116 @@ class IsdwParser {
     return pages;
   }
 
-  // Consume `import "path"` lines. Style imports (.isdw) are resolved immediately.
+  // Consume import lines. Two forms:
+  //   import "path"                  (whole-file style/def import)
+  //   import Name, Name from "path"  (named component/def import)
+  // In both cases the referenced .isdw file is parsed and its definitions +
+  // style-defs are registered into the shared registries.
   private parseImports(resolve?: (path: string) => string): void {
-    while (
-      this.peek(0)?.type === 'IDENT' &&
-      this.peek(0)?.value === 'import' &&
-      this.peek(1)?.type === 'STRING'
-    ) {
-      this.pos++; // consume 'import'
-      const importPath = this.consume('STRING').value as string;
+    while (this.peek(0)?.type === 'IDENT' && this.peek(0)?.value === 'import') {
+      const next = this.peek(1);
 
-      // Determine extension by looking only at the part after the last slash
-      const afterLastSlash = importPath.slice(importPath.lastIndexOf('/') + 1);
-      const dotIdx = afterLastSlash.lastIndexOf('.');
-      const ext = dotIdx >= 0 ? afterLastSlash.slice(dotIdx) : '';
-      const isStyleImport = ext === '.isdw' || ext === '';
-
-      if (isStyleImport && resolve) {
-        const src = resolve(importPath);
-        const sub = new IsdwParser(tokenize(src));
-        sub.styleRegistry = this.styleRegistry; // share registry
-        sub.parseStyleDefs();
+      if (next?.type === 'STRING') {
+        // Whole-file form: import "path"
+        this.pos++; // consume 'import'
+        const importPath = this.consume('STRING').value as string;
+        this.resolveImport(importPath, [], resolve);
+        continue;
       }
-      // Non-.isdw imports are documentation-only at parse time;
-      // the page component handles the actual TS/JS import.
+
+      if (next?.type === 'IDENT') {
+        // Named form: import A, B from "path"
+        this.pos++; // consume 'import'
+        const names: string[] = [this.consume('IDENT').value as string];
+        while (this.peek()?.type === 'COMMA') {
+          this.pos++;
+          names.push(this.consume('IDENT').value as string);
+        }
+        const fromTok = this.consume('IDENT');
+        if (fromTok.value !== 'from') {
+          throw new Error(`[isdw] Expected 'from' in import, got "${fromTok.value}"`);
+        }
+        const importPath = this.consume('STRING').value as string;
+        this.resolveImport(importPath, names, resolve);
+        continue;
+      }
+
+      break;
     }
+  }
+
+  // Resolve and parse an imported .isdw file into the shared registries.
+  // `names`, when non-empty, are validated against what the file actually defines.
+  private resolveImport(
+    importPath: string,
+    names: string[],
+    resolve?: (path: string) => string
+  ): void {
+    // Only .isdw (or extension-less) imports are resolvable here. Other imports
+    // (e.g. .ts/.tsx) are documentation-only at parse time.
+    const afterLastSlash = importPath.slice(importPath.lastIndexOf('/') + 1);
+    const dotIdx = afterLastSlash.lastIndexOf('.');
+    const ext = dotIdx >= 0 ? afterLastSlash.slice(dotIdx) : '';
+    if (ext !== '.isdw' && ext !== '') return;
+    if (!resolve) return;
+
+    const src = resolve(importPath);
+    const sub = new IsdwParser(tokenize(src));
+    sub.styleRegistry = this.styleRegistry; // share registries
+    sub.defRegistry = this.defRegistry;
+    sub.parseImports(resolve); // transitive imports
+    sub.parseTopDecls();
+
+    for (const name of names) {
+      if (
+        !this.defRegistry.has(name) &&
+        !this.styleRegistry.has(name) &&
+        !BUILTIN_NAMES.has(name)
+      ) {
+        console.warn(`[isdw] import: "${name}" is not defined in ${importPath}`);
+      }
+    }
+  }
+
+  // Parse the top-of-file declarations: `define` component definitions and
+  // `Name:BaseType` style-defs, in any order, until a page route or EOF.
+  private parseTopDecls(): void {
+    for (;;) {
+      const t = this.peek();
+      if (t?.type === 'IDENT' && t.value === 'define') {
+        this.parseDefinition();
+        continue;
+      }
+      if (
+        t?.type === 'IDENT' &&
+        this.peek(1)?.type === 'COLON' &&
+        this.peek(2)?.type === 'IDENT'
+      ) {
+        this.parseStyleDefs();
+        continue;
+      }
+      break;
+    }
+  }
+
+  // Consume `define Name(params?) { ...items including Children()... }`.
+  private parseDefinition(): void {
+    this.pos++; // consume 'define'
+    const name = this.consume('IDENT').value as string;
+
+    // Parameter list is parsed but not yet substituted into the body.
+    this.consume('LPAREN');
+    if (this.peek()?.type !== 'RPAREN') this.parseArgList();
+    this.consume('RPAREN');
+
+    this.consume('LBRACE');
+    const body: ParsedItem[] = [];
+    while (this.peek()?.type !== 'RBRACE') {
+      body.push(this.parseItem());
+    }
+    this.consume('RBRACE');
+
+    this.defRegistry.set(name, body);
   }
 
   // Consume `Name:BaseType("arg"...) { prop: value }` definitions.
@@ -259,7 +400,7 @@ class IsdwParser {
       const baseType = this.consume('IDENT').value as string;
 
       // Optional pre-set args: Name:Type("arg1", "arg2") { ... }
-      const defaultArgs: Array<string | number | Record<string, unknown>> = [];
+      const defaultArgs: IsdwArg[] = [];
       if (this.peek()?.type === 'LPAREN') {
         this.consume('LPAREN');
         if (this.peek()?.type !== 'RPAREN') defaultArgs.push(...this.parseArgList());
@@ -316,12 +457,24 @@ class IsdwParser {
 
     // Args are always required: Name(arg, ...) or Name()
     this.consume('LPAREN');
-    const parsedArgs: Array<string | number | Record<string, unknown>> = [];
+    const parsedArgs: IsdwArg[] = [];
     if (this.peek()?.type !== 'RPAREN') parsedArgs.push(...this.parseArgList());
     this.consume('RPAREN');
 
-    // Use provided args; fall back to style-def defaults if none given
-    const args = parsedArgs.length > 0 ? parsedArgs : (regEntry?.defaultArgs ?? []);
+    // Lift any `{ ... }` children-block args out of the arg list; they become
+    // part of this item's children (merged with the trailing `{ }` block below).
+    const inlineChildren: ParsedItem[] = [];
+    const valueArgs: IsdwArg[] = [];
+    for (const a of parsedArgs) {
+      if (a && typeof a === 'object' && Array.isArray((a as Record<string, unknown>).__isdwChildren)) {
+        inlineChildren.push(...((a as { __isdwChildren: ParsedItem[] }).__isdwChildren));
+      } else {
+        valueArgs.push(a);
+      }
+    }
+
+    // Use provided value args; fall back to style-def defaults if none given
+    const args = valueArgs.length > 0 ? valueArgs : (regEntry?.defaultArgs ?? []);
 
     // Dimensions: [height%, width%, anchor] — 'auto' means no fixed dimension
     this.consume('LBRACKET');
@@ -341,7 +494,7 @@ class IsdwParser {
     const style = { ...baseStyle, ...inlineStyle };
 
     this.consume('LBRACE');
-    const children: ParsedItem[] = [];
+    const children: ParsedItem[] = [...inlineChildren];
     while (this.peek()?.type !== 'RBRACE') {
       children.push(this.parseItem());
     }
@@ -358,8 +511,8 @@ class IsdwParser {
     return this.consume('NUMBER').value as number;
   }
 
-  private parseArgList(): Array<string | number | Record<string, unknown>> {
-    const args: Array<string | number | Record<string, unknown>> = [];
+  private parseArgList(): IsdwArg[] {
+    const args: IsdwArg[] = [];
     args.push(this.parseArg());
     while (this.peek()?.type === 'COMMA') {
       this.pos++;
@@ -369,17 +522,35 @@ class IsdwParser {
     return args;
   }
 
-  private parseArg(): string | number | Record<string, unknown> {
+  private parseArg(): IsdwArg {
     const t = this.peek();
     if (!t) throw new Error('[isdw] Expected argument');
     if (t.type === 'STRING') { this.pos++; return t.value as string; }
     if (t.type === 'NUMBER') { this.pos++; return t.value as number; }
-    // Bare identifier as arg = function reference
-    if (t.type === 'IDENT')  { this.pos++; return `${FN_REF_PREFIX}${t.value}`; }
-    if (t.type === 'LBRACE') {
+    // @method — reactive value binding (prop bound to the method's return value).
+    if (t.type === 'VALUE_REF') { this.pos++; return `${VALUE_REF_PREFIX}${t.value}`; }
+    // ~name — two-way model binding to a form-state cell.
+    if (t.type === 'MODEL_REF') { this.pos++; return `${MODEL_REF_PREFIX}${t.value}`; }
+    if (t.type === 'IDENT') {
       this.pos++;
+      // Literal keywords. `null` is the explicit "no handler / no value" placeholder.
+      if (t.value === 'null')  return null;
+      if (t.value === 'true')  return true;
+      if (t.value === 'false') return false;
+      // Any other bare identifier = function reference (e.g. a Button onClick handler).
+      return `${FN_REF_PREFIX}${t.value}`;
+    }
+    // A `{ ... }` argument is a children block — child items placed inside the
+    // component (e.g. `Button("Save", { Image(...) })`). Returned tagged so
+    // parseItem can lift them into the item's children.
+    if (t.type === 'LBRACE') {
+      this.pos++; // consume '{'
+      const childItems: ParsedItem[] = [];
+      while (this.peek()?.type !== 'RBRACE') {
+        childItems.push(this.parseItem());
+      }
       this.consume('RBRACE');
-      return {};
+      return { __isdwChildren: childItems };
     }
     throw new Error(`[isdw] Unexpected token type ${t.type} as argument`);
   }
@@ -428,12 +599,62 @@ function pct(n: number): PercentageString { return `${n}%` as PercentageString; 
 let _idCounter = 0;
 function genId(prefix: string): string { return `${prefix}-${++_idCounter}`; }
 
-function convertItem(item: ParsedItem, components: ComponentDef[]): LayoutDef {
+interface ConvertCtx {
+  components: ComponentDef[];
+  defs: Map<string, ParsedItem[]>;
+  /** Call-site children to inject at a `Children` marker (set while expanding a definition). */
+  slotChildren?: ParsedItem[];
+  /** Definition names currently being expanded — guards against infinite recursion. */
+  expanding: Set<string>;
+}
+
+function sizeOf(item: ParsedItem): SizeDef {
   const size: SizeDef = {};
   if (item.height !== 'auto') size.height = pct(item.height as number);
   if (item.width !== 'auto')  size.width  = pct(item.width as number);
-  const isdwStyle = Object.keys(item.style).length ? item.style : undefined;
+  return size;
+}
 
+function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
+  const size = sizeOf(item);
+  const isdwStyle = Object.keys(item.style).length ? item.style : undefined;
+  const colAnchor = anchorToFlexProps(item.anchor, 'column');
+
+  // `Children` slot marker — replaced by the enclosing definition's call children.
+  if (item.name === 'Children') {
+    const slot = ctx.slotChildren ?? [];
+    // Slot content is real page content: convert it without an active slot context.
+    const childCtx: ConvertCtx = { ...ctx, slotChildren: undefined };
+    return {
+      type: 'flex',
+      direction: 'column',
+      ...colAnchor,
+      size,
+      children: slot.map(child => convertItem(child, childCtx)),
+      isdwStyle,
+    };
+  }
+
+  // Reusable component definition — expand its body, injecting this call's
+  // children at any `Children` marker inside it.
+  const defBody = ctx.defs.get(item.name);
+  if (defBody && !ctx.expanding.has(item.name)) {
+    const innerCtx: ConvertCtx = {
+      ...ctx,
+      slotChildren: item.children,
+      expanding: new Set(ctx.expanding).add(item.name),
+    };
+    return {
+      type: 'flex',
+      direction: 'column',
+      ...colAnchor,
+      size,
+      children: defBody.map(t => convertItem(t, innerCtx)),
+      isdwStyle,
+    };
+  }
+
+  // Layout primitives (Row/Col).
   if (LAYOUT_ITEMS.has(item.name)) {
     const direction = item.name === 'Row' ? 'row' : 'column';
     const { justifyContent, alignItems } = anchorToFlexProps(item.anchor, direction);
@@ -443,15 +664,20 @@ function convertItem(item: ParsedItem, components: ComponentDef[]): LayoutDef {
       justifyContent,
       alignItems,
       size,
-      children: item.children.map(child => convertItem(child, components)),
+      children: item.children.map(child => convertItem(child, ctx)),
       isdwStyle,
     };
   }
 
+  // Component (builtin / registered / custom). Children stay as layout nodes on
+  // the bound cell; the LayoutRenderer threads them into the component as its
+  // slot so containers (Card, Table, imported components) render their content.
+  // slotChildren is passed through so a `Children` marker nested inside a
+  // definition's component still resolves.
   const id = genId(item.name.toLowerCase());
-  const { justifyContent, alignItems } = anchorToFlexProps(item.anchor, 'column');
-  components.push(buildComponentDef(item, id));
-  return { type: 'flex', direction: 'column', justifyContent, alignItems, size, children: [], componentId: id };
+  ctx.components.push(buildComponentDef(item, id));
+  const children = item.children.map(child => convertItem(child, ctx));
+  return { type: 'flex', direction: 'column', ...colAnchor, size, children, componentId: id };
 }
 
 /**
@@ -487,49 +713,81 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
       ? { ...anchorStyle, ...item.style }  // explicit style overrides anchor defaults
       : undefined;
 
-  const [first, second, third] = item.args;
+  // Classify call args. `@x` -> reactive value binding; a bare identifier -> a
+  // handler (onClick); a "/..." string -> a route href; everything else (strings,
+  // numbers, booleans, null) is a positional literal.
+  const valueRefs: string[] = [];
+  const modelRefs: string[] = [];
+  const handlerRefs: string[] = [];
+  const literals: IsdwArg[] = [];
+  for (const a of item.args) {
+    if (typeof a === 'string' && a.startsWith(VALUE_REF_PREFIX)) valueRefs.push(a.slice(VALUE_REF_PREFIX.length));
+    else if (typeof a === 'string' && a.startsWith(MODEL_REF_PREFIX)) modelRefs.push(a.slice(MODEL_REF_PREFIX.length));
+    else if (typeof a === 'string' && a.startsWith(FN_REF_PREFIX)) handlerRefs.push(a.slice(FN_REF_PREFIX.length));
+    else literals.push(a);
+  }
+
+  // The prop a leading `@value` / `~model` binds to, per component. Bound props are
+  // applied after literal props in the renderer, so they win when both are present.
+  const primaryProp = PRIMARY_PROP[item.name] ?? 'value';
+  const bindings: DataBindingDef[] = [
+    ...valueRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'value' as const })),
+    ...modelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const })),
+    ...handlerRefs.map(methodId => ({ prop: 'onClick', methodId })),
+  ];
+  const withBindings = (def: ComponentDef): ComponentDef =>
+    bindings.length ? { ...def, bindings } : def;
+
+  const [first, second] = literals;
 
   switch (item.name) {
     case 'Text':
-      return { id, type: 'Text', props: { text: String(first ?? '') }, isdwStyle };
+      return withBindings({ id, type: 'Text', props: { text: String(first ?? '') }, isdwStyle });
 
     case 'Heading':
-      return {
+      return withBindings({
         id,
         type: 'Heading',
         props: { text: String(first ?? ''), level: typeof second === 'number' ? second : 1 },
         isdwStyle,
-      };
+      });
 
     case 'Button': {
-      // arg classification: strings starting with '/' are routes (href),
-      // strings starting with FN_REF_PREFIX are function bindings (onClick).
-      const fnArgs = item.args.filter(a => typeof a === 'string' && a.startsWith(FN_REF_PREFIX)) as string[];
-      const routeArg = item.args.find(a => typeof a === 'string' && (a as string).startsWith('/')) as string | undefined;
-
-      const props: Record<string, unknown> = { text: String(first ?? '') };
-      if (routeArg) props.href = routeArg;
-
-      const bindings = fnArgs.map(fnRef => ({
-        prop: 'onClick',
-        methodId: fnRef.slice(FN_REF_PREFIX.length),
-      }));
-
-      return { id, type: 'Button', props, ...(bindings.length ? { bindings } : {}), isdwStyle };
+      // For a Button, a "/..." literal is a route href; the first non-route
+      // literal is the label.
+      const route = literals.find(a => typeof a === 'string' && a.startsWith('/')) as string | undefined;
+      const label = literals.find(a => typeof a === 'string' && !a.startsWith('/'));
+      const props: Record<string, unknown> = { text: String(label ?? '') };
+      if (route) props.href = route;
+      return withBindings({ id, type: 'Button', props, isdwStyle });
     }
 
     case 'Image':
-      return { id, type: 'Image', props: { src: String(first ?? ''), alt: String(second ?? '') }, isdwStyle };
+      return withBindings({ id, type: 'Image', props: { src: String(first ?? ''), alt: String(second ?? '') }, isdwStyle });
 
     default:
-      return {
+      return withBindings({
         id,
         type: item.name,
-        props: Object.fromEntries(item.args.map((v, i) => [`arg${i}`, v])),
+        props: Object.fromEntries(literals.map((v, i) => [`arg${i}`, v])),
         isdwStyle,
-      };
+      });
   }
 }
+
+// The prop that a leading `@value` reference binds to, per component type.
+const PRIMARY_PROP: Record<string, string> = {
+  Text: 'text',
+  Heading: 'text',
+  Button: 'text',
+  Image: 'src',
+  Input: 'value',
+  Textarea: 'value',
+  Select: 'value',
+  Checkbox: 'checked',
+  Table: 'data',
+  Repeat: 'data',
+};
 
 const DEFAULT_TOKENS: UIConfig['tokens'] = {
   colors: [
@@ -565,7 +823,8 @@ export function parseIsdw(source: string, options?: ParseOptions): UIConfig {
 
   const pages = parsedPages.map(({ route, scroll, items }) => {
     const components: ComponentDef[] = [];
-    const layoutChildren = items.map(item => convertItem(item, components));
+    const ctx: ConvertCtx = { components, defs: parser.defRegistry, expanding: new Set() };
+    const layoutChildren = items.map(item => convertItem(item, ctx));
     const rootLayout: FlexDef = {
       type: 'flex',
       direction: 'column',

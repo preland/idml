@@ -1,6 +1,26 @@
 import type { DataBindingDef, VisibilityDef } from './binding.types';
 
-export type BuiltinComponentType = 'Text' | 'Heading' | 'Button' | 'Image' | 'List' | 'Card' | 'Divider' | 'Spacer' | 'Icon';
+export type BuiltinComponentType =
+  | 'Text'
+  | 'Heading'
+  | 'Button'
+  | 'Image'
+  | 'List'
+  | 'Card'
+  | 'Divider'
+  | 'Spacer'
+  | 'Icon'
+  | 'Table'
+  | 'Input'
+  | 'Textarea'
+  | 'Select'
+  | 'Option'
+  | 'Checkbox'
+  | 'Radio'
+  | 'Label'
+  | 'Children'
+  | 'Repeat'
+  | 'Form';
 
 export interface ComponentDef {
   id: string;

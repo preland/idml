@@ -8,18 +8,31 @@ import { resolveTokenProps } from './tokens/token-resolver';
 import { getComponent } from './registry/component-registry';
 import { BUILTIN_COMPONENTS } from './builtins';
 import { getMethod } from './registry/method-registry';
+import { RepeatItemContext } from './repeat-context';
+import { FormStateContext } from './form-context';
 
 export interface ComponentRendererProps {
   component: ComponentDef;
   components: ComponentDef[];
+  /**
+   * Rendered children to place inside this component (the "slot"). Supplied by
+   * the LayoutRenderer when a layout node binds a component AND has layout
+   * children — e.g. a custom container like `Card`/`DefaultPageFormat`. When
+   * present it takes precedence over the component's own `children` defs.
+   */
+  slot?: React.ReactNode;
 }
 
 export function ComponentRenderer({
   component,
   components,
+  slot,
 }: ComponentRendererProps): React.ReactElement | null {
   const { config } = useConfigContext();
   const isVisible = useVisibility(component.visibility);
+  // Evaluate bindings before any early return so hook order stays stable —
+  // a 'value' binding may call a method that is itself a hook (useQuery/useState).
+  const boundProps = useBoundProps(component.bindings ?? []);
 
   if (!isVisible) return null;
 
@@ -34,8 +47,6 @@ export function ComponentRenderer({
     ...(component.isdwStyle ?? {}),
   };
 
-  const boundProps = useBoundProps(component.bindings ?? []);
-
   const childElements = (component.children ?? []).map((child) => (
     <ComponentRenderer key={child.id} component={child} components={components} />
   ));
@@ -49,20 +60,72 @@ export function ComponentRenderer({
     return null;
   }
 
-  return (
-    <Component {...component.props} {...boundProps} style={tokenStyle} data-isd-id={component.id}>
-      {childElements}
-    </Component>
-  );
+  const content = slot ?? childElements;
+  const hasContent = Array.isArray(content) ? content.length > 0 : content != null;
+
+  const props = { ...component.props, ...boundProps, style: tokenStyle, 'data-isd-id': component.id };
+
+  // Don't pass children to childless components — void elements (input, etc.)
+  // error if given any children, even an empty array.
+  return hasContent
+    ? <Component {...props}>{content}</Component>
+    : <Component {...props} />;
 }
 
-function useBoundProps(bindings: any[]): Record<string, unknown> {
+function useBoundProps(
+  bindings: { prop: string; methodId: string; kind?: 'handler' | 'value' | 'model' }[]
+): Record<string, unknown> {
+  // The current Repeat row and the enclosing form-state scope. Read once,
+  // unconditionally, to keep hook order stable.
+  const item = React.useContext(RepeatItemContext);
+  const formStore = React.useContext(FormStateContext);
+
   const props: Record<string, unknown> = {};
   for (const binding of bindings) {
-    const method = getMethod(binding.methodId);
-    if (method && typeof method === 'function') {
-      props[binding.prop] = method;
+    if (binding.kind === 'value') {
+      // Resolve the method/path to a live value. If a referenced method is a hook
+      // this subscribes the component and re-renders when its value changes.
+      props[binding.prop] = resolveValueRef(binding.methodId, item);
+    } else if (binding.kind === 'model') {
+      // Two-way: read the form-state cell into the prop, and write it back on change.
+      const name = binding.methodId;
+      const isChecked = binding.prop === 'checked';
+      const current = formStore?.values[name];
+      props[binding.prop] = isChecked ? Boolean(current) : (current ?? '');
+      props.onChange = (e: { target?: { value?: unknown; checked?: unknown } }) =>
+        formStore?.setValue(name, isChecked ? e?.target?.checked : e?.target?.value);
+    } else {
+      // Handler: wrap the method so it receives the current form values as its
+      // first argument (then the original args, e.g. the DOM event). This lets a
+      // save/submit handler read the form — `save(values)` — with no extra wiring.
+      const method = getMethod(binding.methodId);
+      if (typeof method === 'function') {
+        const fn = method as (...a: unknown[]) => unknown;
+        props[binding.prop] = (...args: unknown[]) => fn(formStore?.values ?? {}, ...args);
+      }
     }
   }
   return props;
+}
+
+/**
+ * Resolve a value-reference path. The first segment is either the reserved `item`
+ * (the current Repeat row) or a registered method (called for its value); each
+ * later segment indexes into the result. Examples: `users`, `item.name`,
+ * `currentUser.email`.
+ */
+function resolveValueRef(ref: string, item: unknown): unknown {
+  const segments = ref.split('.');
+  let base: unknown;
+  if (segments[0] === 'item') {
+    base = item;
+  } else {
+    const method = getMethod(segments[0]);
+    base = typeof method === 'function' ? (method as () => unknown)() : undefined;
+  }
+  for (let i = 1; i < segments.length; i++) {
+    if (base == null) return undefined;
+    base = (base as Record<string, unknown>)[segments[i]];
+  }
+  return base;
 }

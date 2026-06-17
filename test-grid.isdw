@@ -6,10 +6,10 @@
 # this file is a simple hello world template
 
 ./home
-Row(1)[50,100,top-left] {
+Row()[50,100,top-left] {
     Text("Hello World")[100,100,top-left]{}
 }
-Row(2)[50,100,top-left] {
+Row()[50,100,top-left] {
     Col(1)[100,50,top-left] {
         Button("Hello", {})[100,100,top-left]{}
     }
