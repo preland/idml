@@ -50,10 +50,18 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
     <LayoutRenderer key={i} layout={child} components={components} />
   ));
 
+  // A node can both bind a component AND carry layout children — that's a custom
+  // container (e.g. Card, or an imported DefaultPageFormat). The children are
+  // rendered and handed to the component as its slot, so the component decides
+  // where they go (directly, or at a `Children` marker once definitions land).
   return (
     <div className={containerClass} style={containerStyle} data-isd-layout>
       {boundComponent ? (
-        <ComponentRenderer component={boundComponent} components={components} />
+        <ComponentRenderer
+          component={boundComponent}
+          components={components}
+          slot={layout.children.length > 0 ? children : undefined}
+        />
       ) : (
         children
       )}
