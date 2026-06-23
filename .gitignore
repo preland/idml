@@ -8,3 +8,4 @@ coverage/
 .turbo/
 ui.config.schema.json
 testthing/
+*.isdw

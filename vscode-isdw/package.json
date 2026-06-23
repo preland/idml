@@ -1,0 +1,43 @@
+{
+  "name": "vscode-isdw",
+  "displayName": "ISDW",
+  "description": "Syntax highlighting for .isdw files (the isd-ui config DSL).",
+  "version": "0.0.1",
+  "license": "MIT",
+  "publisher": "isd",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "scripts": {
+    "check": "node scripts/tokenize-check.mjs"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.0.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "isdw",
+        "aliases": [
+          "ISDW",
+          "isdw"
+        ],
+        "extensions": [
+          ".isdw"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "isdw",
+        "scopeName": "source.isdw",
+        "path": "./syntaxes/isdw.tmLanguage.json"
+      }
+    ]
+  }
+}

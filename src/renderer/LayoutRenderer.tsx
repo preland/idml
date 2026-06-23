@@ -11,15 +11,16 @@ interface LayoutRendererProps {
 }
 
 export function LayoutRenderer({ layout, components }: LayoutRendererProps): React.ReactElement {
-  const { config } = useConfigContext();
+  const { config, debug } = useConfigContext();
 
   const sizeStyle = resolveSizeStyle(layout.size);
   const gapValue = layout.gap ? resolveGap(layout.gap, config.tokens.spacing) : undefined;
 
   const containerStyle: React.CSSProperties = {
     ...sizeStyle,
-    // Show bounding boxes for structural Row/Col containers (not component-bound leaf cells)
-    ...(layout.componentId ? {} : { outline: '1px solid rgba(100,100,100,0.35)' }),
+    // Debug aid (opt-in): show bounding boxes for structural Row/Col containers
+    // (not component-bound leaf cells). Off by default so pages render cleanly.
+    ...(debug && !layout.componentId ? { outline: '1px solid rgba(100,100,100,0.35)' } : {}),
     // Apply .isdw inline styles (can override sizeStyle values, e.g. height: '30vh' for scroll pages)
     ...(layout.isdwStyle ?? {}),
     // Prevent flex children from shrinking so percentage/vh heights are respected and scroll works
@@ -41,6 +42,9 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
     if (layout.rows) containerStyle.gridTemplateRows = `repeat(${layout.rows}, minmax(0, 1fr))`;
     if (gapValue) containerStyle.gap = gapValue;
   }
+
+  // Author-supplied utility classes (e.g. Tailwind) on Row/Col.
+  if (layout.className) containerClass += ` ${layout.className}`;
 
   const boundComponent = layout.componentId
     ? components.find((c) => c.id === layout.componentId)

@@ -18,6 +18,10 @@ interface ParsedItem {
   anchor: string;
   children: ParsedItem[];
   style: Record<string, string>;
+  className?: string;
+  /** Method ids referenced as `@x` tokens inside a class block — resolved per
+   *  render (with the current row item) and appended to className. */
+  classRefs?: string[];
 }
 
 interface ParsedPage {
@@ -30,6 +34,8 @@ interface StyleEntry {
   baseType: string;
   defaultArgs: IsdwArg[];
   style: Record<string, string>;
+  /** Utility (Tailwind) classes baked into this styled variant. */
+  className?: string;
 }
 
 // ==================== TOKENIZER ====================
@@ -40,7 +46,6 @@ type TokenType =
   | 'NUMBER'
   | 'STRING'
   | 'COLOR'
-  | 'STYLE_BLOCK'
   | 'COLON'
   | 'LPAREN'
   | 'RPAREN'
@@ -50,7 +55,8 @@ type TokenType =
   | 'RBRACE'
   | 'COMMA'
   | 'VALUE_REF'
-  | 'MODEL_REF';
+  | 'MODEL_REF'
+  | 'CLASS_BLOCK';
 
 interface Token {
   type: TokenType;
@@ -68,7 +74,48 @@ const SINGLE_CHAR_TOKENS: Record<string, TokenType> = {
   ':': 'COLON',
 };
 
+// Hard maximum line width. Lines longer than this are a parse error: long lines
+// hide structure, so the DSL is kept legible at a glance.
+const MAX_LINE_WIDTH = 80;
+
+/**
+ * Source-level rules enforced before tokenizing (so they apply to the main file
+ * and every imported file uniformly):
+ *  - no line may exceed MAX_LINE_WIDTH columns;
+ *  - comments (`#` lines) are only allowed in the header — a single block at the
+ *    top of the file, before the first line of code. A comment anywhere after
+ *    code has started is an error.
+ * Blank lines are allowed anywhere. Inline `#rrggbb` colours are not affected:
+ * only a line whose first non-whitespace character is `#` counts as a comment.
+ */
+function validateSource(source: string): void {
+  const lines = source.split('\n');
+  let codeStarted = false;
+  lines.forEach((line, idx) => {
+    const lineNo = idx + 1;
+    if (line.length > MAX_LINE_WIDTH) {
+      throw new Error(
+        `[isdw] line ${lineNo} is ${line.length} columns; the limit is ${MAX_LINE_WIDTH}`
+      );
+    }
+    const trimmed = line.trim();
+    if (trimmed === '') return;
+    if (trimmed.startsWith('#')) {
+      if (codeStarted) {
+        throw new Error(
+          `[isdw] line ${lineNo}: comments are only allowed in the header block ` +
+            `at the very top of the file, before any code`
+        );
+      }
+      return;
+    }
+    codeStarted = true;
+  });
+}
+
 function tokenize(source: string): Token[] {
+  validateSource(source);
+
   // Strip whole-line comments (lines where # is the first non-whitespace char).
   // This preserves inline # such as hex colours inside style blocks.
   const stripped = source
@@ -122,11 +169,21 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Inline style block: <...content...>
+    // Inline `<...>` style blocks are no longer supported — all styling lives in
+    // named styled variants (Name:BaseType). Reject them explicitly.
     if (stripped[i] === '<') {
+      throw new Error(
+        '[isdw] inline `<...>` style blocks are no longer supported; ' +
+          'declare a styled variant (Name:BaseType) and apply it instead'
+      );
+    }
+
+    // CSS class block: `class names here` (backticks). Spaces allowed; flows to
+    // the element's className (e.g. Tailwind utilities).
+    if (stripped[i] === '`') {
       let j = i + 1;
-      while (j < stripped.length && stripped[j] !== '>') j++;
-      tokens.push({ type: 'STYLE_BLOCK', value: stripped.slice(i + 1, j).trim() });
+      while (j < stripped.length && stripped[j] !== '`') j++;
+      tokens.push({ type: 'CLASS_BLOCK', value: stripped.slice(i + 1, j).trim() });
       i = j + 1;
       continue;
     }
@@ -212,8 +269,8 @@ const MODEL_REF_PREFIX = '\x00model:';
 // importing from the renderer) to preserve the parser/renderer separation.
 const BUILTIN_NAMES = new Set([
   'Text', 'Heading', 'Button', 'Image', 'List', 'Card', 'Divider', 'Spacer',
-  'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form',
-  'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
+  'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form', 'Modal', 'Column',
+  'Overlay', 'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
 ]);
 
 class IsdwParser {
@@ -224,6 +281,10 @@ class IsdwParser {
   // block registers one; using the name as an item expands the body (macro-style),
   // substituting the call's children at the `Children` marker. See convertItem.
   defRegistry: Map<string, ParsedItem[]> = new Map();
+  // Parameter names per definition (e.g. `define TopBar(title)` -> ['title']).
+  // At expansion the call's positional args are bound to these names and any
+  // matching references inside the body are substituted. See convertItem.
+  defParamRegistry: Map<string, string[]> = new Map();
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -333,6 +394,7 @@ class IsdwParser {
     const sub = new IsdwParser(tokenize(src));
     sub.styleRegistry = this.styleRegistry; // share registries
     sub.defRegistry = this.defRegistry;
+    sub.defParamRegistry = this.defParamRegistry;
     sub.parseImports(resolve); // transitive imports
     sub.parseTopDecls();
 
@@ -373,9 +435,17 @@ class IsdwParser {
     this.pos++; // consume 'define'
     const name = this.consume('IDENT').value as string;
 
-    // Parameter list is parsed but not yet substituted into the body.
+    // Parameter list: bare identifiers, bound positionally to the call args at
+    // expansion time (see convertItem's definition branch + substituteParams).
     this.consume('LPAREN');
-    if (this.peek()?.type !== 'RPAREN') this.parseArgList();
+    const params: string[] = [];
+    if (this.peek()?.type !== 'RPAREN') {
+      params.push(this.consume('IDENT').value as string);
+      while (this.peek()?.type === 'COMMA') {
+        this.pos++;
+        params.push(this.consume('IDENT').value as string);
+      }
+    }
     this.consume('RPAREN');
 
     this.consume('LBRACE');
@@ -386,6 +456,7 @@ class IsdwParser {
     this.consume('RBRACE');
 
     this.defRegistry.set(name, body);
+    this.defParamRegistry.set(name, params);
   }
 
   // Consume `Name:BaseType("arg"...) { prop: value }` definitions.
@@ -407,8 +478,18 @@ class IsdwParser {
         this.consume('RPAREN');
       }
 
-      const style = this.parseStyleDefBody();
-      this.styleRegistry.set(name, { baseType, defaultArgs, style });
+      // Optional baked-in utility classes: Name:Type `tailwind classes`
+      let className: string | undefined;
+      while (this.peek()?.type === 'CLASS_BLOCK') {
+        const cls = this.consume('CLASS_BLOCK').value as string;
+        className = className ? `${className} ${cls}` : cls;
+      }
+
+      // The `{ cssProp: val }` body is optional — a styled variant may carry only
+      // classes (the common case) and/or pre-set args.
+      const style = this.peek()?.type === 'LBRACE' ? this.parseStyleDefBody() : {};
+
+      this.styleRegistry.set(name, { baseType, defaultArgs, style, className });
     }
   }
 
@@ -476,7 +557,15 @@ class IsdwParser {
     // Use provided value args; fall back to style-def defaults if none given
     const args = valueArgs.length > 0 ? valueArgs : (regEntry?.defaultArgs ?? []);
 
-    // Dimensions: [height%, width%, anchor] — 'auto' means no fixed dimension
+    // Dimensions: [height%, width%, anchor]. Required on every item, and always
+    // explicit numbers — the `auto` keyword is gone (see parseDimension), because
+    // every element must declare exactly how much space it occupies.
+    if (this.peek()?.type !== 'LBRACKET') {
+      throw new Error(
+        `[isdw] "${rawName}" is missing its required [height,width,anchor] ` +
+          `dimensions`
+      );
+    }
     this.consume('LBRACKET');
     const height = this.parseDimension();
     this.consume('COMMA');
@@ -485,13 +574,38 @@ class IsdwParser {
     const anchor = this.consume('IDENT').value as string;
     this.consume('RBRACKET');
 
-    // Optional inline <key=val> override block (adds to / overrides registry style)
-    let inlineStyle: Record<string, string> = {};
-    if (this.peek()?.type === 'STYLE_BLOCK') {
-      inlineStyle = parseInlineStyle(this.consume('STYLE_BLOCK').value as string);
+    // Optional `` `class names` `` block before the children. A styled variant
+    // (Name:BaseType) seeds its baked-in classes here. A use-site class block may
+    // contain ONLY dynamic `@method` bindings (e.g. a per-row colour) — literal
+    // utility classes are not allowed at a use site; they belong in a variant.
+    let className: string | undefined = regEntry?.className;
+    while (this.peek()?.type === 'CLASS_BLOCK') {
+      const cls = this.consume('CLASS_BLOCK').value as string;
+      for (const tok of cls.split(/\s+/).filter(Boolean)) {
+        if (!tok.startsWith('@')) {
+          throw new Error(
+            `[isdw] literal class "${tok}" is not allowed at a use site; ` +
+              `declare a styled variant (Name:BaseType) instead`
+          );
+        }
+      }
+      className = className ? `${className} ${cls}` : cls;
     }
 
-    const style = { ...baseStyle, ...inlineStyle };
+    const style = { ...baseStyle };
+
+    // Split the class string into static classes and `@method` references. The
+    // refs are resolved per render (with the current row item) and appended to
+    // className — so e.g. a role badge can colour itself from its row's role.
+    const classRefs: string[] = [];
+    if (className) {
+      const statics: string[] = [];
+      for (const tok of className.split(/\s+/).filter(Boolean)) {
+        if (tok.startsWith('@')) classRefs.push(tok.slice(1));
+        else statics.push(tok);
+      }
+      className = statics.length ? statics.join(' ') : undefined;
+    }
 
     this.consume('LBRACE');
     const children: ParsedItem[] = [...inlineChildren];
@@ -500,13 +614,15 @@ class IsdwParser {
     }
     this.consume('RBRACE');
 
-    return { name, args, height, width, anchor, children, style };
+    return { name, args, height, width, anchor, children, style, className, classRefs };
   }
 
   private parseDimension(): DimValue {
     if (this.peek()?.type === 'IDENT' && this.peek()?.value === 'auto') {
-      this.pos++;
-      return 'auto';
+      throw new Error(
+        '[isdw] the `auto` dimension is no longer supported; give an explicit ' +
+          'percentage (use a Spacer for any intentional empty space)'
+      );
     }
     return this.consume('NUMBER').value as number;
   }
@@ -556,28 +672,35 @@ class IsdwParser {
   }
 }
 
-// ==================== INLINE STYLE BLOCK PARSER ====================
-
-function parseInlineStyle(raw: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  const parts = raw.trim().split(/\s+/);
-  for (const part of parts) {
-    if (!part) continue;
-    if (part === 'bold')   { result.fontWeight = '700'; continue; }
-    if (part === 'italic') { result.fontStyle = 'italic'; continue; }
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    applyStyleProp(part.slice(0, eq), part.slice(eq + 1), result);
-  }
-  return result;
-}
-
 // ==================== CONVERTER ====================
 
 const LAYOUT_ITEMS = new Set(['Row', 'Col']);
 
 const ANCHOR_V: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
 const ANCHOR_H: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
+
+/**
+ * Map an anchor to absolute-position insets, used to place a child inside an
+ * `Overlay` layer. The child keeps its dims (width/height %), so e.g.
+ * `[10,10,bottom-right]` is a 10%×10% box pinned to the bottom-right corner with
+ * the rest of the screen left empty.
+ */
+function anchorToAbsoluteInsets(anchor: string): Record<string, string> {
+  const parts = anchor.split('-');
+  const v = parts.length === 1 ? parts[0] : (parts[0] ?? 'top');
+  const h = parts.length === 1 ? parts[0] : (parts[1] ?? 'left');
+  const css: Record<string, string> = {};
+  if (v === 'bottom') css.bottom = '0';
+  else if (v === 'center') css.top = '50%';
+  else css.top = '0';
+  if (h === 'right') css.right = '0';
+  else if (h === 'center') css.left = '50%';
+  else css.left = '0';
+  if (v === 'center' || h === 'center') {
+    css.transform = `translate(${h === 'center' ? '-50%' : '0'}, ${v === 'center' ? '-50%' : '0'})`;
+  }
+  return css;
+}
 
 function anchorToFlexProps(anchor: string, direction: 'row' | 'column') {
   const parts = anchor.split('-');
@@ -602,10 +725,105 @@ function genId(prefix: string): string { return `${prefix}-${++_idCounter}`; }
 interface ConvertCtx {
   components: ComponentDef[];
   defs: Map<string, ParsedItem[]>;
+  /** Parameter names per definition (bound positionally to call args at expansion). */
+  defParams: Map<string, string[]>;
   /** Call-site children to inject at a `Children` marker (set while expanding a definition). */
   slotChildren?: ParsedItem[];
   /** Definition names currently being expanded — guards against infinite recursion. */
   expanding: Set<string>;
+}
+
+/**
+ * Deep-copy a definition body item, replacing any arg that references a bound
+ * parameter with that parameter's value. Parameters appear in the body as bare
+ * identifiers (handler refs) or `@`/`~` refs whose name matches a param; the
+ * bound value is whatever the caller passed in that position (a literal, another
+ * ref, etc.), so values also thread through nested definition calls.
+ */
+function substituteParams(item: ParsedItem, bindings: Map<string, IsdwArg>): ParsedItem {
+  if (bindings.size === 0) return item;
+  const subArg = (a: IsdwArg): IsdwArg => {
+    if (typeof a === 'string') {
+      for (const prefix of [FN_REF_PREFIX, VALUE_REF_PREFIX, MODEL_REF_PREFIX]) {
+        if (a.startsWith(prefix)) {
+          const name = a.slice(prefix.length);
+          return bindings.has(name) ? (bindings.get(name) as IsdwArg) : a;
+        }
+      }
+      return a;
+    }
+    if (a && typeof a === 'object' && Array.isArray((a as { __isdwChildren?: ParsedItem[] }).__isdwChildren)) {
+      return {
+        __isdwChildren: (a as { __isdwChildren: ParsedItem[] }).__isdwChildren.map(c => substituteParams(c, bindings)),
+      } as IsdwArg;
+    }
+    return a;
+  };
+  return {
+    ...item,
+    args: item.args.map(subArg),
+    children: item.children.map(c => substituteParams(c, bindings)),
+  };
+}
+
+// ==================== LAYOUT (TILING) VALIDATION ====================
+
+/**
+ * Direction in which a node lays its children out, or `null` if the node is NOT
+ * a space-tiling container. Only `Row`, `Col`, `Form` and definition calls tile
+ * their children; everything else (`Overlay`, `Modal`, `Repeat`, `Table`, and
+ * leaf components whose children are a slot) is exempt from the sum-to-100 rule.
+ */
+function containerDirection(
+  name: string,
+  defs: Map<string, ParsedItem[]>
+): 'row' | 'column' | null {
+  if (name === 'Row') return 'row';
+  if (name === 'Col' || name === 'Form') return 'column';
+  if (defs.has(name)) return 'column'; // a def call's slot children flow in a column
+  return null;
+}
+
+/**
+ * Enforce total tiling: a container's children must account for ALL of its space
+ * with no implicit gaps. Along the main axis (height for a column, width for a
+ * row) the children's percentages must sum to exactly 100; along the cross axis
+ * each child must be exactly 100. Any intentional empty space must be an explicit
+ * element (e.g. a Spacer) with a declared percentage.
+ */
+/** Out-of-flow node types: portals / fixed layers. They don't occupy flow space,
+ *  so they neither count toward a parent's tiling sum nor must fill the cross axis. */
+const OUT_OF_FLOW = new Set(['Overlay', 'Modal']);
+
+function validateTiling(children: ParsedItem[], direction: 'row' | 'column', where: string): void {
+  // Out-of-flow children (Overlay/Modal) are positioned, not tiled — skip them.
+  children = children.filter((c) => !OUT_OF_FLOW.has(c.name));
+  if (children.length === 0) return;
+  const main = direction === 'row' ? 'width' : 'height';
+  const cross = direction === 'row' ? 'height' : 'width';
+  let sum = 0;
+  for (const c of children) {
+    sum += c[main] as number;
+    if ((c[cross] as number) !== 100) {
+      throw new Error(
+        `[isdw] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
+          `(got ${c[cross]}); no vacant space is allowed`
+      );
+    }
+  }
+  if (sum !== 100) {
+    throw new Error(
+      `[isdw] children of ${where} must tile to 100% along ${main}; got ${sum}. ` +
+        `Add an explicit Spacer for any gap.`
+    );
+  }
+}
+
+/** Recursively validate tiling for a node's children, descending into all nodes. */
+function walkTiling(item: ParsedItem, defs: Map<string, ParsedItem[]>): void {
+  const dir = containerDirection(item.name, defs);
+  if (dir) validateTiling(item.children, dir, `<${item.name}>`);
+  for (const child of item.children) walkTiling(child, defs);
 }
 
 function sizeOf(item: ParsedItem): SizeDef {
@@ -613,6 +831,63 @@ function sizeOf(item: ParsedItem): SizeDef {
   if (item.height !== 'auto') size.height = pct(item.height as number);
   if (item.width !== 'auto')  size.width  = pct(item.width as number);
   return size;
+}
+
+function mkItem(
+  name: string,
+  args: IsdwArg[],
+  height: DimValue,
+  width: DimValue,
+  anchor: string,
+  children: ParsedItem[],
+  style: Record<string, string> = {}
+): ParsedItem {
+  return { name, args, height, width, anchor, children, style };
+}
+
+/**
+ * Expand `Table(@data){ Column("H"){ cell } ... }` into existing primitives: a
+ * header Row of column labels, then a Repeat over `@data` whose template is a Row
+ * of one cell per column. Cell templates use `@item.field` and resolve per row via
+ * the Repeat's item scope. Each Column's `[h,w,anchor]` provides the column width
+ * and cell alignment (height is auto so rows size to content).
+ */
+function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
+  const dataArg = item.args.find(
+    (a): a is string => typeof a === 'string' && a.startsWith(VALUE_REF_PREFIX)
+  );
+  const columns = item.children.filter(c => c.name === 'Column');
+
+  // Header: a tinted row of small, uppercase, muted column labels with generous
+  // cell padding — the conventional data-table header look.
+  const headerCells = columns.map(col => {
+    const label = mkItem('Text', [String(col.args[0] ?? '')], 'auto', 100, col.anchor, []);
+    label.className = 'text-xs font-medium text-gray-500 uppercase tracking-wider';
+    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, [label]);
+    cell.className = 'px-6 py-3';
+    return cell;
+  });
+  const headerRow = mkItem('Row', [], 'auto', 100, 'top-left', headerCells, {
+    borderBottom: '1px solid #e5e7eb',
+  });
+  headerRow.className = 'bg-gray-50';
+
+  // Body cells carry the same horizontal padding and a comfortable vertical
+  // rhythm; rows are separated by a light divider.
+  const bodyCells = columns.map(col => {
+    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, col.children);
+    cell.className = 'px-6 py-4 whitespace-nowrap';
+    return cell;
+  });
+  const bodyRowTemplate = mkItem('Row', [], 'auto', 100, 'top-left', bodyCells, {
+    borderBottom: '1px solid #e5e7eb',
+  });
+
+  const repeat = mkItem('Repeat', dataArg ? [dataArg] : [], 'auto', 100, 'top-left', [bodyRowTemplate]);
+
+  const tableCol = mkItem('Col', [], item.height, item.width, item.anchor, [headerRow, repeat], item.style);
+  tableCol.className = item.className;
+  return convertItem(tableCol, ctx);
 }
 
 function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
@@ -639,6 +914,14 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // children at any `Children` marker inside it.
   const defBody = ctx.defs.get(item.name);
   if (defBody && !ctx.expanding.has(item.name)) {
+    // Bind the definition's parameters to this call's positional args, then
+    // substitute references in the body (missing args bind to '' so they render
+    // empty rather than leaking the param name).
+    const params = ctx.defParams.get(item.name) ?? [];
+    const bindings = new Map<string, IsdwArg>();
+    params.forEach((p, i) => bindings.set(p, item.args[i] ?? ''));
+    const body = bindings.size ? defBody.map(t => substituteParams(t, bindings)) : defBody;
+
     const innerCtx: ConvertCtx = {
       ...ctx,
       slotChildren: item.children,
@@ -649,9 +932,52 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       direction: 'column',
       ...colAnchor,
       size,
-      children: defBody.map(t => convertItem(t, innerCtx)),
+      children: body.map(t => convertItem(t, innerCtx)),
       isdwStyle,
     };
+  }
+
+  // Overlay — a full-viewport, click-through layer. Each child is absolutely
+  // positioned by its own anchor + dims, so it occupies exactly that box at that
+  // corner and the rest of the screen stays empty and interactive (the layer
+  // itself is pointer-events:none; children opt back in). No fixed/pixel classes
+  // needed — placement comes entirely from dims + anchor.
+  if (item.name === 'Overlay') {
+    const children = item.children.map(child => {
+      const layout = convertItem(child, ctx);
+      return {
+        ...layout,
+        isdwStyle: {
+          ...(layout.isdwStyle ?? {}),
+          position: 'absolute',
+          pointerEvents: 'auto',
+          ...anchorToAbsoluteInsets(child.anchor),
+        },
+      } as LayoutDef;
+    });
+    return {
+      type: 'flex',
+      direction: 'column',
+      size: { width: '100%', height: '100%' },
+      children,
+      isdwStyle: {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        right: '0',
+        bottom: '0',
+        pointerEvents: 'none',
+        outline: 'none',
+        zIndex: '50',
+        ...(isdwStyle ?? {}),
+      },
+      ...(item.className ? { className: item.className } : {}),
+    };
+  }
+
+  // Table sugar — expands to a header row + a Repeat of row templates.
+  if (item.name === 'Table') {
+    return expandTable(item, ctx);
   }
 
   // Layout primitives (Row/Col).
@@ -666,7 +992,24 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       size,
       children: item.children.map(child => convertItem(child, ctx)),
       isdwStyle,
+      ...(item.className ? { className: item.className } : {}),
     };
+  }
+
+  // Select sugar — `Select(~role){ Option("Admin") … }`. The <option> elements
+  // must be direct DOM children of <select>, but every layout child is wrapped in
+  // a layout <div>, which is invalid inside a <select>. So lift Option children
+  // into an `options: [{value,label}]` prop (the Select builtin renders that) and
+  // emit no layout children.
+  if (item.name === 'Select' && item.children.some(c => c.name === 'Option')) {
+    const id = genId('select');
+    const options = item.children
+      .filter(c => c.name === 'Option')
+      .map(c => ({ value: c.args[0] ?? '', label: c.args[1] ?? c.args[0] ?? '' }));
+    const def = buildComponentDef(item, id);
+    def.props = { ...def.props, options };
+    ctx.components.push(def);
+    return { type: 'flex', direction: 'column', ...colAnchor, size, children: [], componentId: id };
   }
 
   // Component (builtin / registered / custom). Children stay as layout nodes on
@@ -734,9 +1077,14 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
     ...valueRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'value' as const })),
     ...modelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const })),
     ...handlerRefs.map(methodId => ({ prop: 'onClick', methodId })),
+    // Dynamic classes (`@method` tokens in a class block) resolve to strings that
+    // are appended to className per render.
+    ...(item.classRefs ?? []).map(methodId => ({ prop: 'className', methodId, kind: 'value' as const })),
   ];
-  const withBindings = (def: ComponentDef): ComponentDef =>
-    bindings.length ? { ...def, bindings } : def;
+  const withBindings = (def: ComponentDef): ComponentDef => {
+    const withB = bindings.length ? { ...def, bindings } : def;
+    return item.className ? { ...withB, className: item.className } : withB;
+  };
 
   const [first, second] = literals;
 
@@ -765,6 +1113,31 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
     case 'Image':
       return withBindings({ id, type: 'Image', props: { src: String(first ?? ''), alt: String(second ?? '') }, isdwStyle });
 
+    case 'Label':
+      return withBindings({ id, type: 'Label', props: { text: String(first ?? '') }, isdwStyle });
+
+    case 'Icon': {
+      // `Icon("House")` → name only; `Icon("House", 24)` → name + size;
+      // `Icon("ChatCenteredDots", 24, "white")` → + colour (a numeric arg is the
+      // size, a string arg the colour). Name may also be bound dynamically via
+      // `@method` (PRIMARY_PROP.Icon = 'name'), e.g. a dark-mode toggle swapping
+      // MoonStars/SunDim.
+      const props: Record<string, unknown> = { name: String(first ?? '') };
+      for (const rest of literals.slice(1)) {
+        if (typeof rest === 'number') props.size = rest;
+        else if (typeof rest === 'string') props.color = rest;
+      }
+      return withBindings({ id, type: 'Icon', props, isdwStyle });
+    }
+
+    case 'Option': {
+      // `Option("Admin")` → value & label both "Admin"; `Option("admin", "Administrator")`
+      // → value "admin", label "Administrator".
+      const value = first ?? '';
+      const label = second ?? first ?? '';
+      return withBindings({ id, type: 'Option', props: { value, label }, isdwStyle });
+    }
+
     default:
       return withBindings({
         id,
@@ -787,6 +1160,8 @@ const PRIMARY_PROP: Record<string, string> = {
   Checkbox: 'checked',
   Table: 'data',
   Repeat: 'data',
+  Modal: 'open',
+  Icon: 'name',
 };
 
 const DEFAULT_TOKENS: UIConfig['tokens'] = {
@@ -821,9 +1196,25 @@ export function parseIsdw(source: string, options?: ParseOptions): UIConfig {
   const parser = new IsdwParser(tokenize(source));
   const parsedPages = parser.parseFile(options?.resolve);
 
+  // Total-tiling validation: every page (a column root) and every definition
+  // body (also a column) must tile to 100%, as must every nested Row/Col/Form.
+  for (const { route, items } of parsedPages) {
+    validateTiling(items, 'column', `page ${route}`);
+    items.forEach((it) => walkTiling(it, parser.defRegistry));
+  }
+  for (const [name, body] of parser.defRegistry) {
+    validateTiling(body, 'column', `define ${name}`);
+    body.forEach((it) => walkTiling(it, parser.defRegistry));
+  }
+
   const pages = parsedPages.map(({ route, scroll, items }) => {
     const components: ComponentDef[] = [];
-    const ctx: ConvertCtx = { components, defs: parser.defRegistry, expanding: new Set() };
+    const ctx: ConvertCtx = {
+      components,
+      defs: parser.defRegistry,
+      defParams: parser.defParamRegistry,
+      expanding: new Set(),
+    };
     const layoutChildren = items.map(item => convertItem(item, ctx));
     const rootLayout: FlexDef = {
       type: 'flex',
