@@ -20,7 +20,8 @@ export type BuiltinComponentType =
   | 'Label'
   | 'Children'
   | 'Repeat'
-  | 'Form';
+  | 'Form'
+  | 'Modal';
 
 export interface ComponentDef {
   id: string;
@@ -36,4 +37,5 @@ export interface ComponentDef {
   visibility?: VisibilityDef;
   children?: ComponentDef[];
   isdwStyle?: Record<string, string>;
+  className?: string;
 }

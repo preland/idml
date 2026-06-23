@@ -20,6 +20,7 @@ export const ComponentDefSchema: z.ZodType<any> = z.lazy(() =>
       visibility: VisibilityDefSchema.optional(),
       children: z.array(ComponentDefSchema).optional(),
       isdwStyle: z.record(z.string()).optional(),
+      className: z.string().optional(),
     })
     .strict()
 );

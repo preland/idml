@@ -1,0 +1,128 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "ISDW",
+  "scopeName": "source.isdw",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#style-def" },
+    { "include": "#route" },
+    { "include": "#keyword" },
+    { "include": "#literal" },
+    { "include": "#string" },
+    { "include": "#class-block" },
+    { "include": "#style-block" },
+    { "include": "#dims" },
+    { "include": "#value-ref" },
+    { "include": "#model-ref" },
+    { "include": "#layout" },
+    { "include": "#component" },
+    { "include": "#color" },
+    { "include": "#number" },
+    { "include": "#handler" }
+  ],
+  "repository": {
+    "comment": {
+      "comment": "Whole-line comments: a line whose first non-whitespace char is '#'. Inline '#rrggbb' colours are not line-anchored, so they are not matched here.",
+      "match": "^\\s*#.*$",
+      "name": "comment.line.number-sign.isdw"
+    },
+    "style-def": {
+      "comment": "Styled-variant definition: `Name:BaseType` at the start of a line.",
+      "match": "^\\s*([A-Z][A-Za-z0-9]*)\\s*(:)\\s*([A-Z][A-Za-z0-9]*)",
+      "captures": {
+        "1": { "name": "entity.name.type.isdw" },
+        "2": { "name": "punctuation.separator.type.isdw" },
+        "3": { "name": "support.class.base-type.isdw" }
+      }
+    },
+    "route": {
+      "comment": "Page route: ./segment or ./segment/segment",
+      "match": "\\./[\\w/-]+",
+      "name": "entity.name.section.route.isdw"
+    },
+    "keyword": {
+      "match": "\\b(import|from|define)\\b",
+      "name": "keyword.control.isdw"
+    },
+    "literal": {
+      "patterns": [
+        { "match": "\\b(true|false|null)\\b", "name": "constant.language.isdw" },
+        { "comment": "`auto` is no longer a valid dimension — flag it.", "match": "\\bauto\\b", "name": "invalid.deprecated.auto.isdw" },
+        { "match": "\\bscroll\\b", "name": "keyword.other.scroll.isdw" }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.isdw",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.isdw" }
+      ]
+    },
+    "class-block": {
+      "comment": "Backtick block of (Tailwind) utility classes; `@method` tokens inside are dynamic class bindings.",
+      "begin": "`",
+      "end": "`",
+      "name": "string.interpolated.class.isdw",
+      "beginCaptures": { "0": { "name": "punctuation.definition.class.begin.isdw" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.class.end.isdw" } },
+      "patterns": [
+        { "match": "@[\\w.-]+", "name": "variable.other.value-binding.isdw" }
+      ]
+    },
+    "style-block": {
+      "comment": "Inline `<...>` style blocks are no longer supported — flag the whole span as illegal so it stands out in the editor.",
+      "begin": "<",
+      "end": ">",
+      "name": "invalid.illegal.style-block.isdw"
+    },
+    "dims": {
+      "comment": "Dimension block: [height%, width%, anchor] (or [scroll] on a route).",
+      "begin": "\\[",
+      "end": "\\]",
+      "name": "meta.dimensions.isdw",
+      "beginCaptures": { "0": { "name": "punctuation.section.brackets.begin.isdw" } },
+      "endCaptures": { "0": { "name": "punctuation.section.brackets.end.isdw" } },
+      "patterns": [
+        { "match": "\\bauto\\b", "name": "invalid.deprecated.auto.isdw" },
+        { "match": "\\bscroll\\b", "name": "keyword.other.scroll.isdw" },
+        { "match": "\\b(top|bottom|center|left|right)(-(top|bottom|center|left|right))?\\b", "name": "support.constant.anchor.isdw" },
+        { "match": "\\b\\d+(\\.\\d+)?\\b", "name": "constant.numeric.isdw" },
+        { "match": ",", "name": "punctuation.separator.isdw" }
+      ]
+    },
+    "value-ref": {
+      "comment": "Reactive value binding: @method or @item.field / @state.x",
+      "match": "@[\\w.-]+",
+      "name": "variable.other.value-binding.isdw"
+    },
+    "model-ref": {
+      "comment": "Two-way model binding to a form-state cell: ~name",
+      "match": "~[\\w-]+",
+      "name": "variable.other.model-binding.isdw"
+    },
+    "layout": {
+      "comment": "Layout primitives.",
+      "match": "\\b(Row|Col)\\b(?=\\s*\\()",
+      "name": "keyword.other.layout.isdw"
+    },
+    "component": {
+      "comment": "A component or definition call: a capitalised identifier before '('.",
+      "match": "\\b([A-Z][A-Za-z0-9]*)\\b(?=\\s*\\()",
+      "name": "support.class.component.isdw"
+    },
+    "color": {
+      "match": "#[0-9a-fA-F]{3,8}\\b",
+      "name": "constant.other.color.isdw"
+    },
+    "number": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.isdw"
+    },
+    "handler": {
+      "comment": "Bare lowercase identifier used as an argument — a handler/method reference (e.g. a Button onClick) or a definition parameter.",
+      "match": "\\b[a-z][A-Za-z0-9]*\\b",
+      "name": "variable.other.handler.isdw"
+    }
+  }
+}

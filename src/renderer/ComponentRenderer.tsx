@@ -63,7 +63,19 @@ export function ComponentRenderer({
   const content = slot ?? childElements;
   const hasContent = Array.isArray(content) ? content.length > 0 : content != null;
 
-  const props = { ...component.props, ...boundProps, style: tokenStyle, 'data-isd-id': component.id };
+  const props: Record<string, unknown> = {
+    ...component.props,
+    ...boundProps,
+    style: tokenStyle,
+    'data-isd-id': component.id,
+  };
+  // className = static author classes + any dynamic `@method` classes (resolved
+  // into boundProps.className), merged so both apply.
+  const mergedClass = [component.className, boundProps.className as string | undefined]
+    .filter(Boolean)
+    .join(' ');
+  if (mergedClass) props.className = mergedClass;
+  else delete props.className;
 
   // Don't pass children to childless components — void elements (input, etc.)
   // error if given any children, even an empty array.
@@ -85,7 +97,13 @@ function useBoundProps(
     if (binding.kind === 'value') {
       // Resolve the method/path to a live value. If a referenced method is a hook
       // this subscribes the component and re-renders when its value changes.
-      props[binding.prop] = resolveValueRef(binding.methodId, item);
+      const resolved = resolveValueRef(binding.methodId, item, formStore?.values);
+      // Multiple `@class` bindings accumulate onto one className string.
+      if (binding.prop === 'className') {
+        props.className = [props.className, resolved].filter(Boolean).join(' ');
+      } else {
+        props[binding.prop] = resolved;
+      }
     } else if (binding.kind === 'model') {
       // Two-way: read the form-state cell into the prop, and write it back on change.
       const name = binding.methodId;
@@ -95,13 +113,20 @@ function useBoundProps(
       props.onChange = (e: { target?: { value?: unknown; checked?: unknown } }) =>
         formStore?.setValue(name, isChecked ? e?.target?.checked : e?.target?.value);
     } else {
-      // Handler: wrap the method so it receives the current form values as its
-      // first argument (then the original args, e.g. the DOM event). This lets a
-      // save/submit handler read the form — `save(values)` — with no extra wiring.
+      // Handler: wrap the method so it receives the current form values plus a
+      // helpers object: `handler(values, { set, event, item })`. `set(name, value)`
+      // writes form state (e.g. to open/close a Modal via `@state.x`); `item` is the
+      // current Repeat row, so a per-row handler (e.g. a table's Edit button) knows
+      // which record it was fired for.
       const method = getMethod(binding.methodId);
       if (typeof method === 'function') {
         const fn = method as (...a: unknown[]) => unknown;
-        props[binding.prop] = (...args: unknown[]) => fn(formStore?.values ?? {}, ...args);
+        props[binding.prop] = (event: unknown) =>
+          fn(formStore?.values ?? {}, {
+            set: (name: string, value: unknown) => formStore?.setValue(name, value),
+            event,
+            item,
+          });
       }
     }
   }
@@ -109,19 +134,25 @@ function useBoundProps(
 }
 
 /**
- * Resolve a value-reference path. The first segment is either the reserved `item`
- * (the current Repeat row) or a registered method (called for its value); each
- * later segment indexes into the result. Examples: `users`, `item.name`,
- * `currentUser.email`.
+ * Resolve a value-reference path. The first segment selects the source:
+ * - `item`  — the current Repeat row
+ * - `state` — the enclosing form-state store (so `@state.isOpen` reads UI state)
+ * - anything else — a registered method, called for its value
+ * Each later segment indexes into the result. Examples: `users`, `item.name`,
+ * `state.isCreateOpen`, `currentUser.email`.
  */
-function resolveValueRef(ref: string, item: unknown): unknown {
+function resolveValueRef(ref: string, item: unknown, state?: Record<string, unknown>): unknown {
   const segments = ref.split('.');
   let base: unknown;
   if (segments[0] === 'item') {
     base = item;
+  } else if (segments[0] === 'state') {
+    base = state;
   } else {
+    // Pass the current row item so a method can compute per-row values (e.g. a
+    // role → colour-class mapping). Plain methods simply ignore the argument.
     const method = getMethod(segments[0]);
-    base = typeof method === 'function' ? (method as () => unknown)() : undefined;
+    base = typeof method === 'function' ? (method as (it: unknown) => unknown)(item) : undefined;
   }
   for (let i = 1; i < segments.length; i++) {
     if (base == null) return undefined;

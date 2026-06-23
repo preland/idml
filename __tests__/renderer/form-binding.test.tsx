@@ -7,11 +7,11 @@ import { parseIsdw } from '../../src/parser/isdw-parser';
 describe('two-way form (model) bindings', () => {
   it('updates form state from an input and reflects it back (controlled)', async () => {
     const config = parseIsdw(`
-      ./home
-      Form()[100,100,top-left] {
-        Input(~name)[100,10,top-left]{}
-      }
-    `);
+./home
+Form()[100,100,top-left] {
+Input(~name)[100,100,top-left]{}
+}
+`);
 
     render(
       <ConfigProvider config={config}>
@@ -27,12 +27,12 @@ describe('two-way form (model) bindings', () => {
 
   it('shares a state cell between inputs bound to the same name', async () => {
     const config = parseIsdw(`
-      ./home
-      Form()[100,100,top-left] {
-        Input(~q)[100,10,top-left]{}
-        Input(~q)[100,10,top-left]{}
-      }
-    `);
+./home
+Form()[100,100,top-left] {
+Input(~q)[50,100,top-left]{}
+Input(~q)[50,100,top-left]{}
+}
+`);
 
     render(
       <ConfigProvider config={config}>
@@ -48,12 +48,12 @@ describe('two-way form (model) bindings', () => {
   it('passes the current form values to a handler when it fires', async () => {
     const calls: Array<Record<string, unknown>> = [];
     const config = parseIsdw(`
-      ./home
-      Form()[100,100,top-left] {
-        Input(~name)[100,10,top-left]{}
-        Button("Save", save)[100,10,top-left]{}
-      }
-    `);
+./home
+Form()[100,100,top-left] {
+Input(~name)[50,100,top-left]{}
+Button("Save", save)[50,100,top-left]{}
+}
+`);
 
     render(
       <ConfigProvider
@@ -73,9 +73,9 @@ describe('two-way form (model) bindings', () => {
 
   it('works at page level without an explicit Form', async () => {
     const config = parseIsdw(`
-      ./home
-      Input(~loose)[100,10,top-left]{}
-    `);
+./home
+Input(~loose)[100,100,top-left]{}
+`);
 
     render(
       <ConfigProvider config={config}>

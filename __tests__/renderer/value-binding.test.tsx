@@ -8,7 +8,7 @@ describe('reactive value bindings', () => {
   it('renders a value-bound prop from a registered method', async () => {
     const config = parseIsdw(`
       ./home
-      Text(@greeting)[100,10,top-left]{}
+      Text(@greeting)[100,100,top-left]{}
     `);
 
     render(
@@ -32,7 +32,7 @@ describe('reactive value bindings', () => {
 
     const config = parseIsdw(`
       ./home
-      Text(@greeting)[100,10,top-left]{}
+      Text(@greeting)[100,100,top-left]{}
     `);
 
     render(

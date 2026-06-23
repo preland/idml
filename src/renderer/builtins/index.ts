@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { RepeatItemContext } from '../repeat-context';
 import { FormStateProvider } from '../form-context';
@@ -126,6 +127,46 @@ const Form = ({ children, style, ...props }: ComponentProps) =>
     React.createElement('form', { style, ...props }, children)
   );
 
+const MODAL_BACKDROP: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+};
+// Only structural defaults that keep a tall modal on-screen. Appearance —
+// background, radius, padding, width, shadow — is left to the panel's className
+// so an inline style here never overrides the author's utility classes (e.g.
+// `max-w-md` would otherwise lose to an inline `maxWidth`).
+const MODAL_PANEL: React.CSSProperties = {
+  maxHeight: '90vh',
+  overflow: 'auto',
+};
+
+// Overlay rendered in a portal when `open` is truthy. Open state typically lives
+// in form state (`Modal(@state.isCreateOpen)`), toggled by handlers via `set`.
+// Clicking the backdrop calls `onClose` if provided.
+const Modal = ({ open, onClose, children, style, ...props }: ComponentProps) => {
+  if (!open) return null;
+  if (typeof document === 'undefined') return null; // SSR guard
+  const panel = React.createElement(
+    'div',
+    {
+      'data-isd-modal': '',
+      style: { ...MODAL_PANEL, ...style },
+      onClick: (e: React.MouseEvent) => e.stopPropagation(),
+      ...props,
+    },
+    children
+  );
+  return createPortal(
+    React.createElement('div', { 'data-isd-modal-backdrop': '', style: MODAL_BACKDROP, onClick: onClose }, panel),
+    document.body
+  );
+};
+
 export const BUILTIN_COMPONENTS = {
   Text,
   Heading,
@@ -147,4 +188,5 @@ export const BUILTIN_COMPONENTS = {
   Children,
   Repeat,
   Form,
+  Modal,
 };
