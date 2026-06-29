@@ -1,8 +1,12 @@
 {
-  "name": "idml",
+  "name": "idml-ui",
   "version": "0.1.0",
   "description": "UI configuration framework for Next.js 15 + TypeScript + Tailwind CSS",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/preland/idml.git"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -25,13 +29,14 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "idml": "./dist/cli.js"
+    "idml": "./dist/cli.cjs"
   },
   "files": [
     "dist",
     "ui.config.schema.json"
   ],
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "tsup && npx tsx scripts/build-json-schema.ts",
     "dev": "tsup --watch",
     "test": "vitest run",

@@ -63,13 +63,13 @@ export async function initCommand(options: { config: string; editor: boolean }) 
   if (!targetPath) {
     console.warn(
       '\n⚠ No next.config.ts/js found. Create one and manually add:\n' +
-        '  import { withUIConfig } from "idml/server";\n' +
+        '  import { withUIConfig } from "idml-ui/server";\n' +
         '  export default withUIConfig()({});\n'
     );
   } else {
     const existing = fs.readFileSync(targetPath, 'utf-8');
     if (!existing.includes('withUIConfig')) {
-      const importLine = `import { withUIConfig } from 'idml/server';\n`;
+      const importLine = `import { withUIConfig } from 'idml-ui/server';\n`;
       const isJs = targetPath.endsWith('.js');
 
       // Simple regex patch: wrap export default
