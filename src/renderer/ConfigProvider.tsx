@@ -20,7 +20,10 @@ export interface ConfigContextValue {
   debug: boolean;
 }
 
-const ConfigContext = createContext<ConfigContextValue | undefined>(undefined);
+// Exported so tests (and other low-level consumers) can render the renderer
+// tree against a hand-built context without ConfigProvider's effect-driven
+// config validation — which never runs under server-side rendering.
+export const ConfigContext = createContext<ConfigContextValue | undefined>(undefined);
 
 export function useConfigContext(): ConfigContextValue {
   const ctx = useContext(ConfigContext);
