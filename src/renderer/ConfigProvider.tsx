@@ -12,9 +12,18 @@ export interface ConfigContextValue {
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
   tokenVars: Record<string, string>;
+  /**
+   * When true, structural Row/Col containers are drawn with a debug bounding-box
+   * outline. Off by default so rendered pages look like real pages; the editor
+   * preview can opt in to visualise layout structure.
+   */
+  debug: boolean;
 }
 
-const ConfigContext = createContext<ConfigContextValue | undefined>(undefined);
+// Exported so tests (and other low-level consumers) can render the renderer
+// tree against a hand-built context without ConfigProvider's effect-driven
+// config validation — which never runs under server-side rendering.
+export const ConfigContext = createContext<ConfigContextValue | undefined>(undefined);
 
 export function useConfigContext(): ConfigContextValue {
   const ctx = useContext(ConfigContext);
@@ -38,6 +47,8 @@ export interface ConfigProviderProps {
   components?: ComponentRegistration[];
   children: React.ReactNode;
   onConfigInvalid?: (error: Error) => void;
+  /** Draw debug bounding boxes around structural containers. Default false. */
+  debug?: boolean;
 }
 
 export function ConfigProvider({
@@ -46,6 +57,7 @@ export function ConfigProvider({
   components = [],
   children,
   onConfigInvalid,
+  debug = false,
 }: ConfigProviderProps): React.ReactElement | null {
   const [validConfig, setValidConfig] = useState<UIConfig | null>(null);
   const [darkMode, setDarkMode] = useState(false);
@@ -95,7 +107,7 @@ export function ConfigProvider({
   const tokenVars = injectTokenVars(validConfig.tokens, darkMode);
 
   return (
-    <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars }}>
+    <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars, debug }}>
       <div style={tokenVars as React.CSSProperties}>{children}</div>
     </ConfigContext.Provider>
   );

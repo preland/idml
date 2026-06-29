@@ -1,0 +1,18 @@
+# code comments live only in this header block
+#
+# format of item: Name(params)[height%, width%, anchor] { subMembers }
+# items are arranged top to bottom, then left to right; a container's children
+# must tile it to 100% (no vacant space). This is a simple hello-world template.
+
+./home
+Row()[50,100,top-left] {
+  Text("Hello World")[100,100,top-left]{}
+}
+Row()[50,100,top-left] {
+  Col()[100,50,top-left] {
+    Button("Hello", {})[100,100,top-left]{}
+  }
+  Col()[100,50,top-left] {
+    Button("World", {})[100,100,top-left]{}
+  }
+}

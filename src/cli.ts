@@ -6,7 +6,7 @@ import { initCommand } from './cli/commands/init';
 const program = new Command();
 
 program
-  .name('isd-ui')
+  .name('idml')
   .description('UI configuration framework for Next.js + Tailwind')
   .version('0.1.0');
 
@@ -19,7 +19,7 @@ program
     try {
       await initCommand(options);
     } catch (err) {
-      console.error('[isd-ui] Error:', err instanceof Error ? err.message : String(err));
+      console.error('[idml] Error:', err instanceof Error ? err.message : String(err));
       process.exit(1);
     }
   });

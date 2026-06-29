@@ -4,7 +4,7 @@ const registry = new Map<string, RegisteredMethod>();
 
 export function registerMethod(id: string, fn: RegisteredMethod): void {
   if (registry.has(id)) {
-    console.warn(`[isd-ui] registerMethod: overwriting existing method "${id}"`);
+    console.warn(`[idml] registerMethod: overwriting existing method "${id}"`);
   }
   registry.set(id, fn);
 }

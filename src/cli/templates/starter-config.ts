@@ -1,5 +1,5 @@
 export const STARTER_CONFIG = {
-  $schema: './node_modules/isd-ui/ui.config.schema.json',
+  $schema: './node_modules/idml/ui.config.schema.json',
   version: '1',
   tokens: {
     colors: [
@@ -34,7 +34,7 @@ export const STARTER_CONFIG = {
         {
           id: 'heading',
           type: 'Heading',
-          props: { level: 1, text: 'Welcome to isd-ui' },
+          props: { level: 1, text: 'Welcome to idml' },
           tokenProps: { typography: 'heading-xl', color: 'on-surface' },
         },
         {

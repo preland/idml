@@ -1,0 +1,43 @@
+{
+  "name": "vscode-idml",
+  "displayName": "IDML",
+  "description": "Syntax highlighting for .idml files (the idml config DSL).",
+  "version": "0.0.1",
+  "license": "MIT",
+  "publisher": "isd",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "scripts": {
+    "check": "node scripts/tokenize-check.mjs"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.0.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "idml",
+        "aliases": [
+          "IDML",
+          "idml"
+        ],
+        "extensions": [
+          ".idml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "idml",
+        "scopeName": "source.idml",
+        "path": "./syntaxes/idml.tmLanguage.json"
+      }
+    ]
+  }
+}

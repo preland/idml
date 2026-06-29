@@ -1,4 +1,4 @@
-# isd-ui
+# idml
 
 A configuration-driven UI framework for Next.js 15 + TypeScript + Tailwind CSS.
 
@@ -19,13 +19,13 @@ Define your entire UI (layout, theming, data bindings) in a single JSON config f
 ### 1. Install
 
 ```bash
-npm install isd-ui
+npm install idml
 ```
 
 ### 2. Initialize
 
 ```bash
-npx isd-ui init
+npx idml init
 ```
 
 This scaffolds `ui.config.json` and wires up the Next.js plugin.
@@ -64,7 +64,7 @@ Edit `ui.config.json`:
 ### 4. Render in your app
 
 ```tsx
-import { ConfigProvider, ConfigRenderer } from 'isd-ui';
+import { ConfigProvider, ConfigRenderer } from 'idml';
 import config from './ui.config.json';
 
 export default function Home() {
@@ -87,9 +87,9 @@ Visit `http://localhost:3000/_isd-editor` to edit your UI visually.
 ## Architecture
 
 - **3 entry points**:
-  - `isd-ui` (client/browser) — React components for rendering
-  - `isd-ui/server` (Node.js) — Next.js plugin, file watcher, SSE routes
-  - `isd-ui/cli` (binary) — `npx isd-ui init` scaffolding tool
+  - `idml` (client/browser) — React components for rendering
+  - `idml/server` (Node.js) — Next.js plugin, file watcher, SSE routes
+  - `idml/cli` (binary) — `npx idml init` scaffolding tool
 
 - **No-pixel rule**: All `width`, `height`, `min-*`, `max-*` values must be percentages. This prevents CSS stacking issues and makes layouts predictable.
 
