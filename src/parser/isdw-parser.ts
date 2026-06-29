@@ -1,9 +1,29 @@
 import type { UIConfig, LayoutDef, ComponentDef, FlexDef, SizeDef, DataBindingDef } from '../types';
-import type { PercentageString } from '../types/layout.types';
+import type { PercentageString, DynamicSize, DynamicDim } from '../types/layout.types';
 
 // ==================== PARSED INTERMEDIATE TYPES ====================
 
-type DimValue = number | 'auto';
+// A dimension is a static percentage number, or a `@ref` value-binding (resolved
+// per render to a dimension) so a cell can resize on state — e.g. a sidebar that
+// narrows when collapsed. A `@ref ? A : B` form picks A/B from the ref's
+// truthiness so the two sizes (the visual values) live in the .isdw, not in a
+// method. (`'auto'` is gone; see parseDimension.)
+type DimRef = { ref: string; whenTrue?: string; whenFalse?: string };
+// `'auto'` is internal-only (table expansion uses it for content-height); the
+// parser rejects it as user input. `@ref` dims come from `parseDimension`.
+type DimValue = number | 'auto' | DimRef;
+const isDimRef = (d: DimValue): d is DimRef => typeof d === 'object' && d !== null && 'ref' in d;
+
+/**
+ * Content-sizing ("hug") flags. An element still declares its `[h,w]` percentage
+ * tile — that tile is its MAX bound — but a hugged axis shrinks the bound
+ * component to its content within the tile (instead of stretching to fill it),
+ * clipping with an ellipsis if the content would overflow the tile.
+ */
+interface HugSpec {
+  w: boolean;
+  h: boolean;
+}
 
 // An argument value in a component call. Bare identifiers become tagged strings
 // (FN_REF_PREFIX = handler, VALUE_REF_PREFIX = reactive value binding); `null`,
@@ -22,6 +42,21 @@ interface ParsedItem {
   /** Method ids referenced as `@x` tokens inside a class block — resolved per
    *  render (with the current row item) and appended to className. */
   classRefs?: string[];
+  /** Conditional class blocks (`` `classes`?@ref ``) applied per render. */
+  condClasses?: { classes: string; ref: string; negate: boolean }[];
+  /** Optional content-sizing flags from a trailing `hug` / `hug-w` / `hug-h`
+   *  token in the dimension bracket. */
+  hug?: HugSpec;
+  /** Optional visibility condition from a `?@ref` / `?!@ref` clause after the
+   *  dims — the element renders only when the ref is truthy (negate flips it). */
+  visibility?: VisibilityRef;
+}
+
+/** A reactive show/hide condition: render the element only when `ref` (a value
+ *  path like `state.open` / `item.x` / a method) is truthy; `negate` flips it. */
+interface VisibilityRef {
+  ref: string;
+  negate: boolean;
 }
 
 interface ParsedPage {
@@ -54,6 +89,8 @@ type TokenType =
   | 'LBRACE'
   | 'RBRACE'
   | 'COMMA'
+  | 'QUESTION'
+  | 'BANG'
   | 'VALUE_REF'
   | 'MODEL_REF'
   | 'CLASS_BLOCK';
@@ -72,6 +109,8 @@ const SINGLE_CHAR_TOKENS: Record<string, TokenType> = {
   '}': 'RBRACE',
   ',': 'COMMA',
   ':': 'COLON',
+  '?': 'QUESTION',
+  '!': 'BANG',
 };
 
 // Hard maximum line width. Lines longer than this are a parse error: long lines
@@ -572,15 +611,55 @@ class IsdwParser {
     const width = this.parseDimension();
     this.consume('COMMA');
     const anchor = this.consume('IDENT').value as string;
+    // Optional trailing sizing keyword: [h, w, anchor, hug|hug-w|hug-h]. It makes
+    // the bound component hug its content within the declared tile (see HugSpec).
+    let hug: HugSpec | undefined;
+    if (this.peek()?.type === 'COMMA') {
+      this.consume('COMMA');
+      const kw = this.consume('IDENT').value as string;
+      if (kw === 'hug') hug = { w: true, h: true };
+      else if (kw === 'hug-w') hug = { w: true, h: false };
+      else if (kw === 'hug-h') hug = { w: false, h: true };
+      else
+        throw new Error(
+          `[isdw] unknown sizing keyword "${kw}" for "${rawName}"; ` +
+            `expected hug, hug-w, or hug-h`
+        );
+    }
     this.consume('RBRACKET');
+
+    // Optional visibility clause: `?@ref` (show when truthy) or `?!@ref` (show
+    // when falsy). `ref` is a value path — `@state.x`, `@item.x`, or `@method`.
+    let visibility: VisibilityRef | undefined;
+    if (this.peek()?.type === 'QUESTION') {
+      this.consume('QUESTION');
+      let negate = false;
+      if (this.peek()?.type === 'BANG') { this.consume('BANG'); negate = true; }
+      const ref = this.consume('VALUE_REF').value as string;
+      visibility = { ref, negate };
+    }
 
     // Optional `` `class names` `` block before the children. A styled variant
     // (Name:BaseType) seeds its baked-in classes here. A use-site class block may
     // contain ONLY dynamic `@method` bindings (e.g. a per-row colour) — literal
     // utility classes are not allowed at a use site; they belong in a variant.
     let className: string | undefined = regEntry?.className;
+    const condClasses: { classes: string; ref: string; negate: boolean }[] = [];
     while (this.peek()?.type === 'CLASS_BLOCK') {
       const cls = this.consume('CLASS_BLOCK').value as string;
+      // Optional trailing condition `?@ref` / `?!@ref`: these classes apply only
+      // when the ref is truthy / falsy. A CONDITIONAL block may use literal
+      // classes — it expresses a state-driven visual (e.g. a pop-up's scale/
+      // opacity), which belongs in the .isdw, not a method.
+      if (this.peek()?.type === 'QUESTION') {
+        this.consume('QUESTION');
+        let negate = false;
+        if (this.peek()?.type === 'BANG') { this.consume('BANG'); negate = true; }
+        const ref = this.consume('VALUE_REF').value as string;
+        condClasses.push({ classes: cls, ref, negate });
+        continue;
+      }
+      // Unconditional use-site block: only `@method` bindings (no literals).
       for (const tok of cls.split(/\s+/).filter(Boolean)) {
         if (!tok.startsWith('@')) {
           throw new Error(
@@ -614,7 +693,7 @@ class IsdwParser {
     }
     this.consume('RBRACE');
 
-    return { name, args, height, width, anchor, children, style, className, classRefs };
+    return { name, args, height, width, anchor, children, style, className, classRefs, condClasses, hug, visibility };
   }
 
   private parseDimension(): DimValue {
@@ -624,7 +703,33 @@ class IsdwParser {
           'percentage (use a Spacer for any intentional empty space)'
       );
     }
+    // `@ref` dimension — resolved per render to a percentage (reactive sizing).
+    // `@ref ? A : B` resolves to A when the ref is truthy, else B (the two sizes
+    // declared inline, e.g. `@state.collapsed ? 3.4vw : 13.5vw`).
+    if (this.peek()?.type === 'VALUE_REF') {
+      const ref = this.consume('VALUE_REF').value as string;
+      if (this.peek()?.type === 'QUESTION') {
+        this.consume('QUESTION');
+        const whenTrue = this.parseDimLiteral();
+        this.consume('COLON');
+        const whenFalse = this.parseDimLiteral();
+        return { ref, whenTrue, whenFalse };
+      }
+      return { ref };
+    }
     return this.consume('NUMBER').value as number;
+  }
+
+  /** A literal dimension value inside a `@ref ? A : B`: a number (→ `%`) or a
+   *  number with a unit (`3.4vw`, `64px`). Returns the final CSS string. */
+  private parseDimLiteral(): string {
+    const n = this.consume('NUMBER').value as number;
+    const next = this.peek();
+    if (next?.type === 'IDENT' && ['vw', 'vh', 'px', 'rem', 'em'].includes(next.value as string)) {
+      this.pos++;
+      return `${n}${next.value}`;
+    }
+    return `${n}%`;
   }
 
   private parseArgList(): IsdwArg[] {
@@ -731,6 +836,9 @@ interface ConvertCtx {
   slotChildren?: ParsedItem[];
   /** Definition names currently being expanded — guards against infinite recursion. */
   expanding: Set<string>;
+  /** True for out-of-flow node types (Overlay/Modal/out-of-flow defs) — their
+   *  cells render with `display:contents` so they occupy no flow space. */
+  isOutOfFlow: (name: string) => boolean;
 }
 
 /**
@@ -795,23 +903,69 @@ function containerDirection(
  *  so they neither count toward a parent's tiling sum nor must fill the cross axis. */
 const OUT_OF_FLOW = new Set(['Overlay', 'Modal']);
 
-function validateTiling(children: ParsedItem[], direction: 'row' | 'column', where: string): void {
-  // Out-of-flow children (Overlay/Modal) are positioned, not tiled — skip them.
-  children = children.filter((c) => !OUT_OF_FLOW.has(c.name));
+/**
+ * A definition is itself out-of-flow when its body renders only out-of-flow
+ * content (Overlay/Modal, or other out-of-flow definitions). This lets a shared
+ * "chrome" widget — e.g. a feedback launcher that is just an Overlay + a Modal —
+ * be called as a sibling without consuming any tiling space.
+ */
+function defIsOutOfFlow(
+  name: string,
+  defs: Map<string, ParsedItem[]>,
+  seen: Set<string> = new Set()
+): boolean {
+  const body = defs.get(name);
+  if (!body || seen.has(name)) return false;
+  seen.add(name);
+  return body.every(
+    (c) => OUT_OF_FLOW.has(c.name) || (defs.has(c.name) && defIsOutOfFlow(c.name, defs, seen))
+  );
+}
+
+/** Build the predicate that decides whether a node takes part in flow tiling. */
+function makeOutOfFlowPredicate(defs: Map<string, ParsedItem[]>): (name: string) => boolean {
+  return (name: string) => OUT_OF_FLOW.has(name) || (defs.has(name) && defIsOutOfFlow(name, defs));
+}
+
+function validateTiling(
+  children: ParsedItem[],
+  direction: 'row' | 'column',
+  where: string,
+  isOutOfFlow: (name: string) => boolean,
+  containerHug?: HugSpec
+): void {
+  // Out-of-flow children (Overlay/Modal/out-of-flow defs) are positioned, not tiled.
+  children = children.filter((c) => !isOutOfFlow(c.name));
   if (children.length === 0) return;
   const main = direction === 'row' ? 'width' : 'height';
   const cross = direction === 'row' ? 'height' : 'width';
+  const mainKey = direction === 'row' ? 'w' : 'h';
+  const crossKey = direction === 'row' ? 'h' : 'w';
+  // Content-flow: when the container hugs the main axis, OR any child hugs the
+  // main axis (is content-sized), the children PACK instead of tiling — so the
+  // sum-to-100 rule is lifted (the leftover is explicit empty padding, exactly
+  // as a hug element's unused tile space is). Strict tiling still applies to
+  // every ordinary container.
+  // A `@ref` (reactive) dim is resolved at render time, so its value can't be
+  // summed statically — its presence on the main axis lifts the sum-to-100 rule
+  // (just like hug), and on the cross axis it's exempt from the fill check. The
+  // author guarantees the runtime values tile (e.g. sidebar + content widths).
+  const packsMain =
+    !!containerHug?.[mainKey] ||
+    children.some((c) => c.hug?.[mainKey] || isDimRef(c[main]));
   let sum = 0;
   for (const c of children) {
-    sum += c[main] as number;
-    if ((c[cross] as number) !== 100) {
+    if (typeof c[main] === 'number') sum += c[main] as number;
+    // A child that hugs the CROSS axis is content-sized there (≤100), and a
+    // `@ref` cross dim is dynamic — both opt out of the fill-the-cross-axis rule.
+    if (!c.hug?.[crossKey] && !isDimRef(c[cross]) && (c[cross] as number) !== 100) {
       throw new Error(
         `[isdw] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
           `(got ${c[cross]}); no vacant space is allowed`
       );
     }
   }
-  if (sum !== 100) {
+  if (!packsMain && sum !== 100) {
     throw new Error(
       `[isdw] children of ${where} must tile to 100% along ${main}; got ${sum}. ` +
         `Add an explicit Spacer for any gap.`
@@ -820,17 +974,98 @@ function validateTiling(children: ParsedItem[], direction: 'row' | 'column', whe
 }
 
 /** Recursively validate tiling for a node's children, descending into all nodes. */
-function walkTiling(item: ParsedItem, defs: Map<string, ParsedItem[]>): void {
+function walkTiling(
+  item: ParsedItem,
+  defs: Map<string, ParsedItem[]>,
+  isOutOfFlow: (name: string) => boolean
+): void {
   const dir = containerDirection(item.name, defs);
-  if (dir) validateTiling(item.children, dir, `<${item.name}>`);
-  for (const child of item.children) walkTiling(child, defs);
+  if (dir) validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.hug);
+  for (const child of item.children) walkTiling(child, defs, isOutOfFlow);
 }
 
 function sizeOf(item: ParsedItem): SizeDef {
   const size: SizeDef = {};
-  if (item.height !== 'auto') size.height = pct(item.height as number);
-  if (item.width !== 'auto')  size.width  = pct(item.width as number);
+  // Only static numeric dims become a fixed `%`; `@ref` dims are resolved at
+  // render time (see dynSizeOf / LayoutRenderer).
+  if (typeof item.height === 'number') size.height = pct(item.height);
+  if (typeof item.width === 'number')  size.width  = pct(item.width);
   return size;
+}
+
+/** Collect the `@ref` (reactive) dimensions — resolved per render, not baked.
+ *  A conditional dim carries its two inline sizes (`whenTrue`/`whenFalse`). */
+function dynSizeOf(item: ParsedItem): DynamicSize | undefined {
+  const dyn: DynamicSize = {};
+  if (isDimRef(item.height)) dyn.height = dimRefToDynamic(item.height);
+  if (isDimRef(item.width))  dyn.width  = dimRefToDynamic(item.width);
+  return dyn.width || dyn.height ? dyn : undefined;
+}
+
+function dimRefToDynamic(d: DimRef): DynamicDim {
+  return d.whenTrue !== undefined
+    ? { ref: d.ref, whenTrue: d.whenTrue, whenFalse: d.whenFalse }
+    : { ref: d.ref };
+}
+
+/**
+ * Inline styles that make a bound component hug its content on the requested
+ * axes. `fit-content` shrinks the box to its content but never past the tile
+ * (the tile is the available width/height); `nowrap` + `overflow:hidden` +
+ * `text-overflow:ellipsis` truncate a too-long label with `…` instead of letting
+ * it spill out of the tile. These are spread LAST into the component's style, so
+ * they override the renderer's default `width/height:100%` fill.
+ */
+function hugStyles(hug: HugSpec): Record<string, string> {
+  const s: Record<string, string> = {};
+  if (hug.w) {
+    s.width = 'fit-content';
+    s.maxWidth = '100%';
+    s.minWidth = '0';
+    s.overflow = 'hidden';
+    s.textOverflow = 'ellipsis';
+    s.whiteSpace = 'nowrap';
+  }
+  if (hug.h) {
+    s.height = 'fit-content';
+    s.maxHeight = '100%';
+  }
+  return s;
+}
+
+/**
+ * Cell-level hug styles for a CONTAINER (Row/Col/Form): the cell shrinks to its
+ * packed children on the hugged axis, capped at its tile. No overflow/ellipsis
+ * (that would clip the children) — truncation is a leaf-text concern only.
+ */
+function hugContainerStyles(hug: HugSpec): Record<string, string> {
+  const s: Record<string, string> = {};
+  // NB: no inline max-width/height cap. The cell shrinks to its content
+  // (fit-content); a hard tile cap would override author `max-w-*` classes
+  // (which the feedback launcher's hover text-reveal relies on), and the
+  // surrounding flex layout already constrains the cell in practice.
+  if (hug.w) s.width = 'fit-content';
+  if (hug.h) s.height = 'fit-content';
+  return s;
+}
+
+/** Node names that can't be hugged: they bind no component AND don't lay out
+ *  flow children whose packing `hug` could control. (`Table` IS huggable — it
+ *  expands to a Col of content-height rows, so `hug-h` gives a content-height
+ *  card with no dead space below the last row; handled in `expandTable`.) */
+const HUG_INVALID_ON = new Set(['Overlay', 'Modal', 'Children']);
+
+/** Throw if `hug` is used where it has nothing to size (a portal/slot/table or
+ *  a definition call). Containers (Row/Col/Form) and components are fine. */
+function assertHuggable(item: ParsedItem, isDef: boolean): void {
+  if (!item.hug) return;
+  if (HUG_INVALID_ON.has(item.name) || isDef) {
+    throw new Error(
+      `[isdw] "${item.name}" cannot use hug — nothing to content-size here. ` +
+        `hug applies to components (e.g. Button/Text) and layout containers ` +
+        `(Row/Col/Form), not definitions, slots, tables, or out-of-flow layers.`
+    );
+  }
 }
 
 function mkItem(
@@ -861,39 +1096,79 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // Header: a tinted row of small, uppercase, muted column labels with generous
   // cell padding — the conventional data-table header look.
   const headerCells = columns.map(col => {
-    const label = mkItem('Text', [String(col.args[0] ?? '')], 'auto', 100, col.anchor, []);
-    label.className = 'text-xs font-medium text-gray-500 uppercase tracking-wider';
-    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, [label]);
-    cell.className = 'px-6 py-3';
+    // Font size is set in vw (not a px/rem `text-xs` class) so table headers
+    // scale with the viewport like the rest of the text.
+    const label = mkItem(
+      'Text', [String(col.args[0] ?? '')], 'auto', 100, col.anchor, [], { fontSize: '0.63vw' }
+    );
+    label.className = 'font-medium text-gray-500 uppercase tracking-wider';
+    // Cell padding is vw (not px-6/py-3) so the table is zoom-invariant.
+    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, [label], {
+      paddingLeft: '1.6vw', paddingRight: '1.6vw', paddingTop: '0.8vw', paddingBottom: '0.8vw',
+    });
     return cell;
   });
   const headerRow = mkItem('Row', [], 'auto', 100, 'top-left', headerCells, {
-    borderBottom: '1px solid #e5e7eb',
+    borderBottom: '0.07vw solid #e5e7eb',
   });
   headerRow.className = 'bg-gray-50';
 
   // Body cells carry the same horizontal padding and a comfortable vertical
   // rhythm; rows are separated by a light divider.
   const bodyCells = columns.map(col => {
-    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, col.children);
-    cell.className = 'px-6 py-4 whitespace-nowrap';
+    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, col.children, {
+      paddingLeft: '1.6vw', paddingRight: '1.6vw', paddingTop: '1vw', paddingBottom: '1vw',
+    });
+    cell.className = 'whitespace-nowrap';
     return cell;
   });
   const bodyRowTemplate = mkItem('Row', [], 'auto', 100, 'top-left', bodyCells, {
-    borderBottom: '1px solid #e5e7eb',
+    borderBottom: '0.07vw solid #e5e7eb',
   });
 
   const repeat = mkItem('Repeat', dataArg ? [dataArg] : [], 'auto', 100, 'top-left', [bodyRowTemplate]);
 
-  const tableCol = mkItem('Col', [], item.height, item.width, item.anchor, [headerRow, repeat], item.style);
+  // `hug` content-sizes the card on the requested axis: an `auto` dim emits no
+  // fixed size, so the Col shrinks to its rows (no dead white space below the
+  // last row) instead of stretching to the declared tile height.
+  const tableStyle = { ...item.style };
+  if (item.hug?.w) tableStyle.width = 'fit-content';
+  const tableCol = mkItem(
+    'Col', [],
+    item.hug?.h ? 'auto' : item.height,
+    item.hug?.w ? 'auto' : item.width,
+    item.anchor, [headerRow, repeat], tableStyle
+  );
   tableCol.className = item.className;
   return convertItem(tableCol, ctx);
 }
 
+/** Convert a parsed item, attaching its `?@ref` visibility condition (if any) to
+ *  the resulting cell. The heavy lifting is in `convertNode`. */
 function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
+  const def = convertNode(item, ctx);
+  if (item.visibility) def.visibility = item.visibility;
+  const dyn = dynSizeOf(item);
+  if (dyn) def.dynamicSize = dyn;
+  // Dynamic `@class` refs / conditional class blocks on a CONTAINER (no bound
+  // component) are resolved by the LayoutRenderer; a component's `@class` refs
+  // are already wired as className value-bindings.
+  if (item.classRefs?.length && !def.componentId) def.classRefs = item.classRefs;
+  if (item.condClasses?.length) def.condClasses = item.condClasses;
+  return def;
+}
+
+function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
+  assertHuggable(item, ctx.defs.has(item.name));
   const size = sizeOf(item);
   const isdwStyle = Object.keys(item.style).length ? item.style : undefined;
   const colAnchor = anchorToFlexProps(item.anchor, 'column');
+  // Out-of-flow nodes (Modal / out-of-flow defs) render with `display:contents`
+  // so their wrapper cell occupies NO flow space (their real content is a portal
+  // or fixed layer). This means authors don't have to fake a 0 height for them.
+  // (Overlay has its own branch below; its layer is already position:fixed.)
+  const outOfFlow = ctx.isOutOfFlow(item.name);
+  const cellStyle = outOfFlow ? { ...(isdwStyle ?? {}), display: 'contents' } : isdwStyle;
 
   // `Children` slot marker — replaced by the enclosing definition's call children.
   if (item.name === 'Children') {
@@ -933,7 +1208,7 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       ...colAnchor,
       size,
       children: body.map(t => convertItem(t, innerCtx)),
-      isdwStyle,
+      isdwStyle: cellStyle,
     };
   }
 
@@ -945,6 +1220,18 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   if (item.name === 'Overlay') {
     const children = item.children.map(child => {
       const layout = convertItem(child, ctx);
+      // An Overlay child is positioned (not tiled), so `hug` may shrink it to
+      // content on the hugged axis — its declared dim becomes the MAX bound
+      // (so a docked panel grows from its corner to fit content, no dead space).
+      const hugStyle: Record<string, string> = {};
+      if (child.hug?.w) {
+        hugStyle.width = 'fit-content';
+        if (layout.size?.width) hugStyle.maxWidth = layout.size.width;
+      }
+      if (child.hug?.h) {
+        hugStyle.height = 'fit-content';
+        if (layout.size?.height) hugStyle.maxHeight = layout.size.height;
+      }
       return {
         ...layout,
         isdwStyle: {
@@ -952,6 +1239,7 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
           position: 'absolute',
           pointerEvents: 'auto',
           ...anchorToAbsoluteInsets(child.anchor),
+          ...hugStyle,
         },
       } as LayoutDef;
     });
@@ -984,14 +1272,32 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   if (LAYOUT_ITEMS.has(item.name)) {
     const direction = item.name === 'Row' ? 'row' : 'column';
     const { justifyContent, alignItems } = anchorToFlexProps(item.anchor, direction);
+    const children = item.children.map(child => convertItem(child, ctx));
+    // Content-flow: a container hugged on its MAIN axis lays its children out by
+    // content (they pack) instead of tiling. The container keeps its own size;
+    // each child's main-axis size is dropped so it shrinks to content, and the
+    // anchor's justify-content packs them, leaving the rest as explicit empty
+    // space. (Cross-axis hug, if any, just content-sizes the cell itself.)
+    const mainHug = direction === 'column' ? item.hug?.h : item.hug?.w;
+    if (mainHug) {
+      for (const ch of children) {
+        if (!ch.size) continue;
+        if (direction === 'column') delete ch.size.height;
+        else delete ch.size.width;
+      }
+    }
+    const crossHug = direction === 'column' ? item.hug?.w : item.hug?.h;
+    const containerStyle = crossHug
+      ? { ...(isdwStyle ?? {}), ...hugContainerStyles({ w: direction === 'column', h: direction === 'row' }) }
+      : isdwStyle;
     return {
       type: 'flex',
       direction,
       justifyContent,
       alignItems,
       size,
-      children: item.children.map(child => convertItem(child, ctx)),
-      isdwStyle,
+      children,
+      isdwStyle: containerStyle,
       ...(item.className ? { className: item.className } : {}),
     };
   }
@@ -1020,7 +1326,28 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   const id = genId(item.name.toLowerCase());
   ctx.components.push(buildComponentDef(item, id));
   const children = item.children.map(child => convertItem(child, ctx));
-  return { type: 'flex', direction: 'column', ...colAnchor, size, children, componentId: id };
+  // A hugged component shrinks to its content; make its CELL content-width/height
+  // too. Otherwise the cell keeps the dim's `width:100%`, which collapses to 0
+  // inside a fit-content parent (e.g. the feedback launcher's hover label) and
+  // is what makes a hug pill content-sized within a definite-width column.
+  const hugCell: Record<string, string> = {};
+  if (item.hug?.w) {
+    hugCell.width = 'fit-content';
+    if (typeof item.width === 'number') hugCell.maxWidth = `${item.width}%`;
+  }
+  if (item.hug?.h) {
+    hugCell.height = 'fit-content';
+    if (typeof item.height === 'number') hugCell.maxHeight = `${item.height}%`;
+  }
+  const cellIsdw = outOfFlow
+    ? { ...(cellStyle ?? {}), ...hugCell }
+    : Object.keys(hugCell).length
+      ? hugCell
+      : undefined;
+  return {
+    type: 'flex', direction: 'column', ...colAnchor, size, children, componentId: id,
+    ...(cellIsdw ? { isdwStyle: cellIsdw } : {}),
+  };
 }
 
 /**
@@ -1051,10 +1378,11 @@ function anchorToComponentStyle(anchor: string, componentType: string): Record<s
 
 function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   const anchorStyle = anchorToComponentStyle(item.anchor, item.name);
-  const isdwStyle =
-    Object.keys(item.style).length || Object.keys(anchorStyle).length
-      ? { ...anchorStyle, ...item.style }  // explicit style overrides anchor defaults
-      : undefined;
+  // hug styles win over anchor defaults and variant styles so the component
+  // actually shrinks to content (overriding the renderer's default fill).
+  const hug = item.hug ? hugStyles(item.hug) : {};
+  const merged = { ...anchorStyle, ...item.style, ...hug };
+  const isdwStyle = Object.keys(merged).length ? merged : undefined;
 
   // Classify call args. `@x` -> reactive value binding; a bare identifier -> a
   // handler (onClick); a "/..." string -> a route href; everything else (strings,
@@ -1138,6 +1466,17 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
       return withBindings({ id, type: 'Option', props: { value, label }, isdwStyle });
     }
 
+    case 'Input':
+    case 'Textarea':
+      // `Input(~model, "Placeholder text")` — the `~model` binds the value; the
+      // first string literal is the placeholder (its text is content → .isdw).
+      return withBindings({
+        id,
+        type: item.name,
+        props: first != null ? { placeholder: String(first) } : {},
+        isdwStyle,
+      });
+
     default:
       return withBindings({
         id,
@@ -1198,13 +1537,14 @@ export function parseIsdw(source: string, options?: ParseOptions): UIConfig {
 
   // Total-tiling validation: every page (a column root) and every definition
   // body (also a column) must tile to 100%, as must every nested Row/Col/Form.
+  const isOutOfFlow = makeOutOfFlowPredicate(parser.defRegistry);
   for (const { route, items } of parsedPages) {
-    validateTiling(items, 'column', `page ${route}`);
-    items.forEach((it) => walkTiling(it, parser.defRegistry));
+    validateTiling(items, 'column', `page ${route}`, isOutOfFlow);
+    items.forEach((it) => walkTiling(it, parser.defRegistry, isOutOfFlow));
   }
   for (const [name, body] of parser.defRegistry) {
-    validateTiling(body, 'column', `define ${name}`);
-    body.forEach((it) => walkTiling(it, parser.defRegistry));
+    validateTiling(body, 'column', `define ${name}`, isOutOfFlow);
+    body.forEach((it) => walkTiling(it, parser.defRegistry, isOutOfFlow));
   }
 
   const pages = parsedPages.map(({ route, scroll, items }) => {
@@ -1214,6 +1554,7 @@ export function parseIsdw(source: string, options?: ParseOptions): UIConfig {
       defs: parser.defRegistry,
       defParams: parser.defParamRegistry,
       expanding: new Set(),
+      isOutOfFlow,
     };
     const layoutChildren = items.map(item => convertItem(item, ctx));
     const rootLayout: FlexDef = {
