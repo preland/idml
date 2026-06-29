@@ -1,0 +1,128 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "IDML",
+  "scopeName": "source.idml",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#style-def" },
+    { "include": "#route" },
+    { "include": "#keyword" },
+    { "include": "#literal" },
+    { "include": "#string" },
+    { "include": "#class-block" },
+    { "include": "#style-block" },
+    { "include": "#dims" },
+    { "include": "#value-ref" },
+    { "include": "#model-ref" },
+    { "include": "#layout" },
+    { "include": "#component" },
+    { "include": "#color" },
+    { "include": "#number" },
+    { "include": "#handler" }
+  ],
+  "repository": {
+    "comment": {
+      "comment": "Whole-line comments: a line whose first non-whitespace char is '#'. Inline '#rrggbb' colours are not line-anchored, so they are not matched here.",
+      "match": "^\\s*#.*$",
+      "name": "comment.line.number-sign.idml"
+    },
+    "style-def": {
+      "comment": "Styled-variant definition: `Name:BaseType` at the start of a line.",
+      "match": "^\\s*([A-Z][A-Za-z0-9]*)\\s*(:)\\s*([A-Z][A-Za-z0-9]*)",
+      "captures": {
+        "1": { "name": "entity.name.type.idml" },
+        "2": { "name": "punctuation.separator.type.idml" },
+        "3": { "name": "support.class.base-type.idml" }
+      }
+    },
+    "route": {
+      "comment": "Page route: ./segment or ./segment/segment",
+      "match": "\\./[\\w/-]+",
+      "name": "entity.name.section.route.idml"
+    },
+    "keyword": {
+      "match": "\\b(import|from|define)\\b",
+      "name": "keyword.control.idml"
+    },
+    "literal": {
+      "patterns": [
+        { "match": "\\b(true|false|null)\\b", "name": "constant.language.idml" },
+        { "comment": "`auto` is no longer a valid dimension — flag it.", "match": "\\bauto\\b", "name": "invalid.deprecated.auto.idml" },
+        { "match": "\\bscroll\\b", "name": "keyword.other.scroll.idml" }
+      ]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.idml",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.idml" }
+      ]
+    },
+    "class-block": {
+      "comment": "Backtick block of (Tailwind) utility classes; `@method` tokens inside are dynamic class bindings.",
+      "begin": "`",
+      "end": "`",
+      "name": "string.interpolated.class.idml",
+      "beginCaptures": { "0": { "name": "punctuation.definition.class.begin.idml" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.class.end.idml" } },
+      "patterns": [
+        { "match": "@[\\w.-]+", "name": "variable.other.value-binding.idml" }
+      ]
+    },
+    "style-block": {
+      "comment": "Inline `<...>` style blocks are no longer supported — flag the whole span as illegal so it stands out in the editor.",
+      "begin": "<",
+      "end": ">",
+      "name": "invalid.illegal.style-block.idml"
+    },
+    "dims": {
+      "comment": "Dimension block: [height%, width%, anchor] (or [scroll] on a route).",
+      "begin": "\\[",
+      "end": "\\]",
+      "name": "meta.dimensions.idml",
+      "beginCaptures": { "0": { "name": "punctuation.section.brackets.begin.idml" } },
+      "endCaptures": { "0": { "name": "punctuation.section.brackets.end.idml" } },
+      "patterns": [
+        { "match": "\\bauto\\b", "name": "invalid.deprecated.auto.idml" },
+        { "match": "\\bscroll\\b", "name": "keyword.other.scroll.idml" },
+        { "match": "\\b(top|bottom|center|left|right)(-(top|bottom|center|left|right))?\\b", "name": "support.constant.anchor.idml" },
+        { "match": "\\b\\d+(\\.\\d+)?\\b", "name": "constant.numeric.idml" },
+        { "match": ",", "name": "punctuation.separator.idml" }
+      ]
+    },
+    "value-ref": {
+      "comment": "Reactive value binding: @method or @item.field / @state.x",
+      "match": "@[\\w.-]+",
+      "name": "variable.other.value-binding.idml"
+    },
+    "model-ref": {
+      "comment": "Two-way model binding to a form-state cell: ~name",
+      "match": "~[\\w-]+",
+      "name": "variable.other.model-binding.idml"
+    },
+    "layout": {
+      "comment": "Layout primitives.",
+      "match": "\\b(Row|Col)\\b(?=\\s*\\()",
+      "name": "keyword.other.layout.idml"
+    },
+    "component": {
+      "comment": "A component or definition call: a capitalised identifier before '('.",
+      "match": "\\b([A-Z][A-Za-z0-9]*)\\b(?=\\s*\\()",
+      "name": "support.class.component.idml"
+    },
+    "color": {
+      "match": "#[0-9a-fA-F]{3,8}\\b",
+      "name": "constant.other.color.idml"
+    },
+    "number": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.idml"
+    },
+    "handler": {
+      "comment": "Bare lowercase identifier used as an argument — a handler/method reference (e.g. a Button onClick) or a definition parameter.",
+      "match": "\\b[a-z][A-Za-z0-9]*\\b",
+      "name": "variable.other.handler.idml"
+    }
+  }
+}

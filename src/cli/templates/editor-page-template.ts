@@ -1,4 +1,4 @@
-export const EDITOR_PAGE_TEMPLATE = `import { EditorPage } from 'isd-ui/editor';
+export const EDITOR_PAGE_TEMPLATE = `import { EditorPage } from 'idml/editor';
 import { notFound } from 'next/navigation';
 
 export default function Page() {

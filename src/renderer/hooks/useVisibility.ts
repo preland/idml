@@ -7,7 +7,7 @@ export function useVisibility(rule: VisibilityDef | undefined): boolean {
   const method = getMethod(rule.methodId);
   if (!method) {
     console.warn(
-      `[isd-ui] Visibility method "${rule.methodId}" not registered — defaulting to visible`
+      `[idml] Visibility method "${rule.methodId}" not registered — defaulting to visible`
     );
     return true;
   }
