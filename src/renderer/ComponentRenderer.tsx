@@ -141,7 +141,7 @@ function useBoundProps(
  * Each later segment indexes into the result. Examples: `users`, `item.name`,
  * `state.isCreateOpen`, `currentUser.email`.
  */
-function resolveValueRef(ref: string, item: unknown, state?: Record<string, unknown>): unknown {
+export function resolveValueRef(ref: string, item: unknown, state?: Record<string, unknown>): unknown {
   const segments = ref.split('.');
   let base: unknown;
   if (segments[0] === 'item') {
@@ -149,10 +149,15 @@ function resolveValueRef(ref: string, item: unknown, state?: Record<string, unkn
   } else if (segments[0] === 'state') {
     base = state;
   } else {
-    // Pass the current row item so a method can compute per-row values (e.g. a
-    // role → colour-class mapping). Plain methods simply ignore the argument.
+    // Pass the current row item AND the form state so a method can compute a
+    // value from either — e.g. a role → colour-class mapping (per-row) or a
+    // state-driven animation class (`feedbackOpen` → scale-100/scale-0). Plain
+    // methods simply ignore the extra arguments.
     const method = getMethod(segments[0]);
-    base = typeof method === 'function' ? (method as (it: unknown) => unknown)(item) : undefined;
+    base =
+      typeof method === 'function'
+        ? (method as (it: unknown, st?: Record<string, unknown>) => unknown)(item, state)
+        : undefined;
   }
   for (let i = 1; i < segments.length; i++) {
     if (base == null) return undefined;
