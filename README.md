@@ -19,7 +19,7 @@ Define your entire UI (layout, theming, data bindings) in a single JSON config f
 ### 1. Install
 
 ```bash
-npm install idml
+npm install idml-ui
 ```
 
 ### 2. Initialize
@@ -64,7 +64,7 @@ Edit `ui.config.json`:
 ### 4. Render in your app
 
 ```tsx
-import { ConfigProvider, ConfigRenderer } from 'idml';
+import { ConfigProvider, ConfigRenderer } from 'idml-ui';
 import config from './ui.config.json';
 
 export default function Home() {
@@ -88,7 +88,7 @@ Visit `http://localhost:3000/_isd-editor` to edit your UI visually.
 
 - **3 entry points**:
   - `idml` (client/browser) — React components for rendering
-  - `idml/server` (Node.js) — Next.js plugin, file watcher, SSE routes
+  - `idml-ui/server` (Node.js) — Next.js plugin, file watcher, SSE routes
   - `idml/cli` (binary) — `npx idml init` scaffolding tool
 
 - **No-pixel rule**: All `width`, `height`, `min-*`, `max-*` values must be percentages. This prevents CSS stacking issues and makes layouts predictable.

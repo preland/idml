@@ -1,4 +1,4 @@
-export const EVENTS_ROUTE_TEMPLATE = `import { startWatcher, addSSEWriter } from 'idml/server';
+export const EVENTS_ROUTE_TEMPLATE = `import { startWatcher, addSSEWriter } from 'idml-ui/server';
 
 const CONFIG_PATH = process.env.ISD_UI_CONFIG_PATH!;
 
