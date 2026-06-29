@@ -2,17 +2,19 @@
 # Shared chrome for every page: a sidebar with logout + feedback buttons, and an
 # empty region (the Children slot) that each page fills with its own content.
 # `logout` and `openFeedback` are bare identifiers, so they bind to registered
-# methods of those names (the button onClick handlers).
+# methods of those names (the button onClick handlers). A trailing Spacer fills
+# the rest of the sidebar's height so the column tiles to 100% with no gap.
 
 define DefaultPageFormat() {
-    Row()[100,100,top-left] {
-        Col()[15,100,top-left] {
-            Text("JSBIO")[100,10,top-left]{}
-            Button("Logout", logout)[100,8,top-left]{}
-            Button("Feedback", openFeedback)[100,8,top-left]{}
-        }
-        Col()[85,100,top-left] {
-            Children()[100,100,top-left]{}
-        }
+  Row()[100,100,top-left] {
+    Col()[100,15,top-left] {
+      Text("JSBIO")[10,100,top-left]{}
+      Button("Logout", logout)[10,100,top-left]{}
+      Button("Feedback", openFeedback)[10,100,top-left]{}
+      Spacer()[70,100,top-left]{}
     }
+    Col()[100,85,top-left] {
+      Children()[100,100,top-left]{}
+    }
+  }
 }

@@ -1,15 +1,16 @@
-./admin/users
-
-# Note: you can define new primitives and use them elsewhere
+# user-page.isdw
+# You can define new primitives elsewhere and import them. DefaultPageFormat is
+# the shared chrome (sidebar + logout + feedback + an empty region filled by the
+# page content). The page body below tiles its column to 100%: the header takes
+# 20% of the height, the content Col the remaining 80%.
 
 import DefaultPageFormat,Table from "./page-format.isdw"
 
-# DefaultPageFormat = elements that are shared between pages
-# in this case, it just has the sidebar, logout, and feedback buttons, as well as an empty region that is filled by the page content, defined next
+./admin/users
 DefaultPageFormat()[100,100,top-left] {
-    Text("User Management")[20, 10, top-left]{}
-    Col()[80, 90, center]{
-        Button("Create User", null)[20,10, top-right]{}
-        Table()[100,90,center]{}
-    }
+  Text("User Management")[20,100,top-left]{}
+  Col()[80,100,center] {
+    Button("Create User", null)[20,100,top-right]{}
+    Table()[80,100,center]{}
+  }
 }
