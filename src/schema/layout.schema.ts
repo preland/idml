@@ -16,6 +16,26 @@ export const SizeDefSchema = z
   })
   .strict();
 
+const VisibilitySchema = z
+  .object({ ref: z.string(), negate: z.boolean().optional() })
+  .strict();
+
+const ConditionalClassSchema = z
+  .object({ classes: z.string(), ref: z.string(), negate: z.boolean().optional() })
+  .strict();
+
+const DynamicDimSchema = z
+  .object({
+    ref: z.string(),
+    whenTrue: z.string().optional(),
+    whenFalse: z.string().optional(),
+  })
+  .strict();
+
+const DynamicSizeSchema = z
+  .object({ width: DynamicDimSchema.optional(), height: DynamicDimSchema.optional() })
+  .strict();
+
 export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
   z.discriminatedUnion('type', [
     z
@@ -33,6 +53,10 @@ export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
         componentId: z.string().optional(),
         isdwStyle: z.record(z.string()).optional(),
         className: z.string().optional(),
+        classRefs: z.array(z.string()).optional(),
+        condClasses: z.array(ConditionalClassSchema).optional(),
+        visibility: VisibilitySchema.optional(),
+        dynamicSize: DynamicSizeSchema.optional(),
       })
       .strict(),
     z
@@ -46,6 +70,10 @@ export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
         componentId: z.string().optional(),
         isdwStyle: z.record(z.string()).optional(),
         className: z.string().optional(),
+        classRefs: z.array(z.string()).optional(),
+        condClasses: z.array(ConditionalClassSchema).optional(),
+        visibility: VisibilitySchema.optional(),
+        dynamicSize: DynamicSizeSchema.optional(),
       })
       .strict(),
   ])
