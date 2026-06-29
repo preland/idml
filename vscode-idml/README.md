@@ -1,7 +1,7 @@
-# ISDW — VS Code language support
+# IDML — VS Code language support
 
-Syntax highlighting for `.isdw` files, the declarative UI DSL parsed by
-`isd-ui` (`src/parser/isdw-parser.ts`).
+Syntax highlighting for `.idml` files, the declarative UI DSL parsed by
+`idml` (`src/parser/idml-parser.ts`).
 
 ## What it highlights
 
@@ -40,7 +40,7 @@ you can run it from source:
 
 ```bash
 # symlink into your extensions dir, then reload VS Code
-ln -s "$(pwd)" ~/.vscode/extensions/vscode-isdw
+ln -s "$(pwd)" ~/.vscode/extensions/vscode-idml
 ```
 
 To produce a `.vsix` for sharing: `npx @vscode/vsce package`.

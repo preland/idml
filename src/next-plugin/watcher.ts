@@ -19,7 +19,7 @@ export function startWatcher(configPath: string): void {
   });
 
   watcher.on('error', (err) => {
-    console.error('[isd-ui] Watcher error:', err);
+    console.error('[idml] Watcher error:', err);
   });
 }
 

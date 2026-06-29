@@ -63,7 +63,7 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
       const cs = getComputedStyle(el);
       if (cs.overflowY === 'hidden' && el.scrollHeight - el.clientHeight > 1) {
         console.error(
-          `[isd-ui] content overflows its box and is clipped — ` +
+          `[idml] content overflows its box and is clipped — ` +
             `${el.scrollHeight - el.clientHeight}px taller than its height. ` +
             `Reduce the content or its spacing.`,
           el
@@ -86,8 +86,8 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
     // Debug aid (opt-in): show bounding boxes for structural Row/Col containers
     // (not component-bound leaf cells). Off by default so pages render cleanly.
     ...(debug && !layout.componentId ? { outline: '1px solid rgba(100,100,100,0.35)' } : {}),
-    // Apply .isdw inline styles (can override sizeStyle values, e.g. height: '30vh' for scroll pages)
-    ...(layout.isdwStyle ?? {}),
+    // Apply .idml inline styles (can override sizeStyle values, e.g. height: '30vh' for scroll pages)
+    ...(layout.idmlStyle ?? {}),
     // Prevent flex children from shrinking so percentage/vh heights are respected and scroll works
     flexShrink: 0,
   };
@@ -135,7 +135,7 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
   }
   // Conditional class blocks: apply each block's classes when its `?@ref`
   // condition holds (`negate` flips it) — e.g. a pop-up's scale/opacity per
-  // @state.feedbackOpen, with the actual classes declared in the .isdw.
+  // @state.feedbackOpen, with the actual classes declared in the .idml.
   if (layout.condClasses?.length) {
     for (const c of layout.condClasses) {
       const v = resolveValueRef(c.ref, item, formStore?.values);

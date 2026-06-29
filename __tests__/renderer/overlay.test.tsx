@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 const PAGE = `
 RoundBtn:Button \`rounded-full\`
@@ -16,7 +16,7 @@ describe('Overlay layer', () => {
   it('renders a fixed, click-through layer with an exactly-sized, clickable child', async () => {
     let clicked = 0;
     const { container } = render(
-      <ConfigProvider config={parseIsdw(PAGE)} methods={[{ id: 'openFeedback', fn: () => { clicked++; } }]}>
+      <ConfigProvider config={parseIdml(PAGE)} methods={[{ id: 'openFeedback', fn: () => { clicked++; } }]}>
         <ConfigRenderer page="/home" />
       </ConfigProvider>
     );

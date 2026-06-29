@@ -62,7 +62,7 @@ const Spacer = (props: ComponentProps) => React.createElement('div', props);
 const Icon = ({ name, ...props }: ComponentProps) =>
   React.createElement('span', props, name || '●');
 
-// Stub. The real Table is being designed as an isdw object with its own data
+// Stub. The real Table is being designed as an idml object with its own data
 // binding/column format; for now it renders a labelled placeholder so pages that
 // reference it compose and lay out correctly.
 const Table = ({ children, ...props }: ComponentProps) =>

@@ -4,11 +4,11 @@ import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
-// The page is a real .isdw artifact at the test route ./test/users (vitest runs
+// The page is a real .idml artifact at the test route ./test/users (vitest runs
 // from the project root, so resolve against cwd).
-const SOURCE = readFileSync(resolve(process.cwd(), 'test-users-page.isdw'), 'utf-8');
+const SOURCE = readFileSync(resolve(process.cwd(), 'test-users-page.idml'), 'utf-8');
 
 type Helpers = { set: (n: string, v: unknown) => void; item?: any };
 
@@ -42,7 +42,7 @@ function renderPage() {
     { id: 'closeEdit', fn: (...a: unknown[]) => (a[1] as Helpers).set('editOpen', false) },
   ];
 
-  const config = parseIsdw(SOURCE);
+  const config = parseIdml(SOURCE);
   render(
     <ConfigProvider config={config} methods={methods}>
       <ConfigRenderer page="/test/users" />
@@ -51,9 +51,9 @@ function renderPage() {
   return { created, updated };
 }
 
-describe('jsbio Users page (recreated in .isdw)', () => {
+describe('jsbio Users page (recreated in .idml)', () => {
   it('parses to the test route', () => {
-    const config = parseIsdw(SOURCE);
+    const config = parseIdml(SOURCE);
     expect(config.pages[0].route).toBe('/test/users');
   });
 

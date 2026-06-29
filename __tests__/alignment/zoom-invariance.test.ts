@@ -61,7 +61,7 @@ async function fractionDrift(
   return { maxDrift, worst };
 }
 
-/** Reusable assertion for use against real .isdw fixtures elsewhere. */
+/** Reusable assertion for use against real .idml fixtures elsewhere. */
 export async function assertZoomInvariant(source: string, resolve?: (p: string) => string): Promise<void> {
   const { maxDrift, worst } = await fractionDrift(source, resolve);
   expect(maxDrift, `largest zoom drift — ${worst}`).toBeLessThan(TOL);

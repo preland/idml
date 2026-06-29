@@ -44,7 +44,7 @@ export function ComponentRenderer({
     ...(FILL_HEIGHT.has(component.type) ? { height: '100%' } : {}),
     boxSizing: 'border-box' as const,
     ...resolveTokenProps(component.tokenProps, config.tokens),
-    ...(component.isdwStyle ?? {}),
+    ...(component.idmlStyle ?? {}),
   };
 
   const childElements = (component.children ?? []).map((child) => (
@@ -56,7 +56,7 @@ export function ComponentRenderer({
     (BUILTIN_COMPONENTS as Record<string, any>)[component.type];
 
   if (!Component) {
-    console.warn(`[isd-ui] Unknown component type "${component.type}"`);
+    console.warn(`[idml] Unknown component type "${component.type}"`);
     return null;
   }
 

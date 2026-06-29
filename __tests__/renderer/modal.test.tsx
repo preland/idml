@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 // Open button flips state.createOpen on; the Modal reads @state.createOpen; the
 // Close button flips it off — all via the form-state store + the `set` helper.
@@ -27,7 +27,7 @@ const methods = [
 
 describe('Modal', () => {
   it('is hidden until opened, then shows in a portal, then closes', async () => {
-    const config = parseIsdw(MODAL_PAGE);
+    const config = parseIdml(MODAL_PAGE);
     render(
       <ConfigProvider config={config} methods={methods}>
         <ConfigRenderer page="/home" />

@@ -1,7 +1,7 @@
 # Alignment tests
 
 These guard the framework's core promise: **the percentage sizes an author
-writes in `.isdw` are faithfully realized in the rendered layout.**
+writes in `.idml` are faithfully realized in the rendered layout.**
 
 Two layers, fastest first:
 
@@ -49,7 +49,7 @@ CHROMIUM_PATH=/path/to/chromium npm run test:align
 ## Adding a fixture
 
 Add a case to `layout-pixels.test.ts` and call `check(source)` — it parses the
-`.isdw`, renders + measures it, and compares against the declared percentages.
+`.idml`, renders + measures it, and compares against the declared percentages.
 Keep empirical fixtures to pure `Row`/`Col` tiling so the DOM maps one-to-one to
 the `LayoutDef` tree; exercise components and out-of-flow nodes in the
 conversion tests (or with a bespoke assertion, as the `Modal` case shows).

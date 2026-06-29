@@ -9,7 +9,7 @@ export async function initCommand(options: { config: string; editor: boolean }) 
   const cwd = process.cwd();
   const configPath = path.resolve(cwd, options.config);
 
-  console.log('[isd-ui] Initializing...\n');
+  console.log('[idml] Initializing...\n');
 
   // 1. Write starter ui.config.json
   if (fs.existsSync(configPath)) {
@@ -63,13 +63,13 @@ export async function initCommand(options: { config: string; editor: boolean }) 
   if (!targetPath) {
     console.warn(
       '\n⚠ No next.config.ts/js found. Create one and manually add:\n' +
-        '  import { withUIConfig } from "isd-ui/server";\n' +
+        '  import { withUIConfig } from "idml/server";\n' +
         '  export default withUIConfig()({});\n'
     );
   } else {
     const existing = fs.readFileSync(targetPath, 'utf-8');
     if (!existing.includes('withUIConfig')) {
-      const importLine = `import { withUIConfig } from 'isd-ui/server';\n`;
+      const importLine = `import { withUIConfig } from 'idml/server';\n`;
       const isJs = targetPath.endsWith('.js');
 
       // Simple regex patch: wrap export default
@@ -115,8 +115,8 @@ export async function initCommand(options: { config: string; editor: boolean }) 
 
   if (tailwindTarget) {
     const tailwindContent = fs.readFileSync(tailwindTarget, 'utf-8');
-    const isdPath = './node_modules/isd-ui/dist/**/*.{js,mjs}';
-    if (!tailwindContent.includes('isd-ui')) {
+    const isdPath = './node_modules/idml/dist/**/*.{js,mjs}';
+    if (!tailwindContent.includes('idml')) {
       // Simple text patch to add to content array
       const patched = tailwindContent.replace(
         /content:\s*\[/,
@@ -127,7 +127,7 @@ export async function initCommand(options: { config: string; editor: boolean }) 
     }
   }
 
-  console.log('\n✅ isd-ui initialized!\n');
+  console.log('\n✅ idml initialized!\n');
   console.log('Next steps:');
   console.log('  1. npm run dev');
   console.log('  2. Visit http://localhost:3000/_isd-editor');

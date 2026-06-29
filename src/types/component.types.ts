@@ -36,6 +36,6 @@ export interface ComponentDef {
   bindings?: DataBindingDef[];
   visibility?: VisibilityDef;
   children?: ComponentDef[];
-  isdwStyle?: Record<string, string>;
+  idmlStyle?: Record<string, string>;
   className?: string;
 }

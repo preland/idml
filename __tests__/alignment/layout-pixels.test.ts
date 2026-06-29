@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 import type { LayoutDef } from '../../src/types';
 import { measure, findChromium, closeBrowser, type Measured } from './measure';
 
@@ -43,7 +43,7 @@ function flattenMeasured(m: Measured): Measured[] {
 
 async function check(source: string): Promise<void> {
   const measured = await measure(source, { exe: CHROMIUM!, viewport: { width: VW, height: VH } });
-  const root = parseIsdw(source).pages[0].layout;
+  const root = parseIdml(source).pages[0].layout;
   const expected = expectedBoxes(root, VW, VH);
   const got = flattenMeasured(measured);
 

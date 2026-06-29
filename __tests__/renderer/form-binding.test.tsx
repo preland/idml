@@ -2,11 +2,11 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 describe('two-way form (model) bindings', () => {
   it('updates form state from an input and reflects it back (controlled)', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Form()[100,100,top-left] {
 Input(~name)[100,100,top-left]{}
@@ -26,7 +26,7 @@ Input(~name)[100,100,top-left]{}
   });
 
   it('shares a state cell between inputs bound to the same name', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Form()[100,100,top-left] {
 Input(~q)[50,100,top-left]{}
@@ -47,7 +47,7 @@ Input(~q)[50,100,top-left]{}
 
   it('passes the current form values to a handler when it fires', async () => {
     const calls: Array<Record<string, unknown>> = [];
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Form()[100,100,top-left] {
 Input(~name)[50,100,top-left]{}
@@ -72,7 +72,7 @@ Button("Save", save)[50,100,top-left]{}
   });
 
   it('works at page level without an explicit Form', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Input(~loose)[100,100,top-left]{}
 `);

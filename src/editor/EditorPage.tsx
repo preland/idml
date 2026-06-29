@@ -21,7 +21,7 @@ export function EditorPage(): React.ReactElement {
         setLoading(false);
       })
       .catch((err) => {
-        console.error('[isd-ui editor] Failed to load config:', err);
+        console.error('[idml editor] Failed to load config:', err);
         setLoading(false);
       });
   }, []);

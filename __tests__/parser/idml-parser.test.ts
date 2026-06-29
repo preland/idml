@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 import type { LayoutDef, ComponentDef } from '../../src/types';
 
 // NOTE: snippets are written flush-left (no indentation) so the strict
@@ -20,9 +20,9 @@ function findNodeByComponentId(layout: LayoutDef, componentId: string): LayoutDe
   return undefined;
 }
 
-describe('isdw parser — children threading', () => {
+describe('idml parser — children threading', () => {
   it('preserves children of a custom container component (not just Row/Col)', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Card()[100,100,top-left] {
 Text("Hello")[100,100,top-left]{}
@@ -45,7 +45,7 @@ Text("Hello")[100,100,top-left]{}
   });
 
   it('lifts a `{ ... }` argument block into the component\'s children', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Button("Save", { Image("/icon.png")[100,100,center]{} })[100,100,top-left]{}
 `);
@@ -66,7 +66,7 @@ Button("Save", { Image("/icon.png")[100,100,center]{} })[100,100,top-left]{}
   });
 
   it('treats an empty `{}` argument as no children and keeps real args clean', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Button("Create User", {})[100,100,top-right]{}
 `);
@@ -80,7 +80,7 @@ Button("Create User", {})[100,100,top-right]{}
   });
 
   it('expands Table(@data){ Column… } into headers + a Repeat of cell templates', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./admin/users
 Table(@users)[100,100,center] {
 Column("Name")[10,50,top-left]{ Text(@item.name)[100,100,top-left]{} }
@@ -108,9 +108,9 @@ Button("Edit", editUser)[100,100,top-left]{}
   });
 });
 
-describe('isdw parser — args: literals, handlers, value bindings', () => {
+describe('idml parser — args: literals, handlers, value bindings', () => {
   it('treats null as a literal (no handler), keeping the text', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Button("Create User", null)[100,100,top-right]{}
 `);
@@ -120,7 +120,7 @@ Button("Create User", null)[100,100,top-right]{}
   });
 
   it('binds a bare identifier as an onClick handler', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Button("Save", saveUser)[100,100,top-right]{}
 `);
@@ -129,7 +129,7 @@ Button("Save", saveUser)[100,100,top-right]{}
   });
 
   it('binds @method as a reactive value binding on the component primary prop', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Text(@currentUserName)[100,100,top-left]{}
 `);
@@ -138,9 +138,9 @@ Text(@currentUserName)[100,100,top-left]{}
   });
 });
 
-describe('isdw parser — Icon', () => {
+describe('idml parser — Icon', () => {
   it('maps Icon("House") to a name prop (not arg0)', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Icon("House")[100,100,top-left]{}
 `);
@@ -149,7 +149,7 @@ Icon("House")[100,100,top-left]{}
   });
 
   it('maps a second numeric arg to size', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Icon("Gear", 24)[100,100,top-left]{}
 `);
@@ -158,7 +158,7 @@ Icon("Gear", 24)[100,100,top-left]{}
   });
 
   it('maps a string arg after the size to color', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Icon("ChatCenteredDots", 24, "white")[100,100,top-left]{}
 `);
@@ -167,7 +167,7 @@ Icon("ChatCenteredDots", 24, "white")[100,100,top-left]{}
   });
 
   it('binds @method to the name prop (dynamic icon)', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Icon(@darkIcon)[100,100,top-left]{}
 `);
@@ -176,9 +176,9 @@ Icon(@darkIcon)[100,100,top-left]{}
   });
 });
 
-describe('isdw parser — styled variants are the only home for classes', () => {
+describe('idml parser — styled variants are the only home for classes', () => {
   it('bakes a class block into a Name:BaseType variant and applies it on use', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 SidebarLink:Button \`text-left py-2 px-2 rounded hover:bg-gray-800\`
 ./home
 SidebarLink("Logout", logout)[100,100,top-left]{}
@@ -190,7 +190,7 @@ SidebarLink("Logout", logout)[100,100,top-left]{}
   });
 
   it('applies a variant on a Row layout node', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 Bar:Row \`flex items-center gap-4\`
 ./home
 Bar()[100,100,top-left] {
@@ -202,7 +202,7 @@ Text("hi")[100,100,top-left]{}
   });
 
   it('supports a variant with default args and no css body', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 Brand:Text("Project 2031") \`text-xl font-bold\`
 ./home
 Brand()[100,100,top-left]{}
@@ -213,7 +213,7 @@ Brand()[100,100,top-left]{}
   });
 
   it('allows a use-site class block of ONLY dynamic @ bindings (no literals)', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 RoleBadge:Text \`inline-flex px-2 rounded-full\`
 ./home
 RoleBadge(@item.role)[100,100,top-left]\`@roleClass\`{}
@@ -225,9 +225,9 @@ RoleBadge(@item.role)[100,100,top-left]\`@roleClass\`{}
   });
 });
 
-describe('isdw parser — definition parameters', () => {
+describe('idml parser — definition parameters', () => {
   it('substitutes a positional param into the body', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 Title:Text \`text-2xl\`
 define TopBar(title) {
 Title(title)[100,100,top-left]{}
@@ -241,7 +241,7 @@ TopBar("User Management")[100,100,top-left]{}
   });
 
   it('threads a param through a nested definition call', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 define Inner(x) {
 Text(x)[100,100,top-left]{}
 }
@@ -256,7 +256,7 @@ Outer("Hello")[100,100,top-left]{}
   });
 
   it('renders an empty value when a param is not supplied', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 define TopBar(title) {
 Text(title)[100,100,top-left]{}
 }
@@ -269,9 +269,9 @@ TopBar()[100,100,top-left]{}
   });
 });
 
-describe('isdw parser — two-way model bindings', () => {
+describe('idml parser — two-way model bindings', () => {
   it('binds ~name on an Input to the value prop (kind model)', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Input(~email)[100,100,top-left]{}
 `);
@@ -280,7 +280,7 @@ Input(~email)[100,100,top-left]{}
   });
 
   it('binds ~active on a Checkbox to the checked prop', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Checkbox(~active)[100,100,top-left]{}
 `);
@@ -289,9 +289,9 @@ Checkbox(~active)[100,100,top-left]{}
   });
 });
 
-describe('isdw parser — repeater', () => {
+describe('idml parser — repeater', () => {
   it('parses Repeat with a data value-binding and an item template', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Repeat(@users)[100,100,top-left] {
 Text(@item.name)[100,100,top-left]{}
@@ -311,9 +311,9 @@ Text(@item.name)[100,100,top-left]{}
   });
 });
 
-describe('isdw parser — Overlay layer', () => {
+describe('idml parser — Overlay layer', () => {
   it('positions an overlay child absolutely by its anchor + dims (rest empty)', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 RoundBtn:Button \`rounded-full\`
 ./home
 Overlay()[100,100,top-left] {
@@ -322,32 +322,32 @@ RoundBtn("Feedback", openFeedback)[10,10,bottom-right]{}
 `);
     const overlay = config.pages[0].layout.children[0];
     // The layer fills the viewport but is click-through.
-    expect(overlay.isdwStyle?.position).toBe('fixed');
-    expect(overlay.isdwStyle?.pointerEvents).toBe('none');
+    expect(overlay.idmlStyle?.position).toBe('fixed');
+    expect(overlay.idmlStyle?.pointerEvents).toBe('none');
     // Its child is an exact 10%×10% box pinned to the bottom-right, clickable.
     const cell = overlay.children[0];
-    expect(cell.isdwStyle?.position).toBe('absolute');
-    expect(cell.isdwStyle?.pointerEvents).toBe('auto');
-    expect(cell.isdwStyle?.bottom).toBe('0');
-    expect(cell.isdwStyle?.right).toBe('0');
+    expect(cell.idmlStyle?.position).toBe('absolute');
+    expect(cell.idmlStyle?.pointerEvents).toBe('auto');
+    expect(cell.idmlStyle?.bottom).toBe('0');
+    expect(cell.idmlStyle?.right).toBe('0');
     expect(cell.size).toEqual({ height: '10%', width: '10%' });
   });
 
   it('centers an overlay child with a translate transform', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Overlay()[100,100,top-left] { Text("hi")[20,20,center]{} }
 `);
     const cell = config.pages[0].layout.children[0].children[0];
-    expect(cell.isdwStyle?.top).toBe('50%');
-    expect(cell.isdwStyle?.left).toBe('50%');
-    expect(cell.isdwStyle?.transform).toBe('translate(-50%, -50%)');
+    expect(cell.idmlStyle?.top).toBe('50%');
+    expect(cell.idmlStyle?.left).toBe('50%');
+    expect(cell.idmlStyle?.transform).toBe('translate(-50%, -50%)');
   });
 });
 
-describe('isdw parser — definitions & slots', () => {
+describe('idml parser — definitions & slots', () => {
   it('expands a `define` component and fills its Children slot', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 define Box() {
 Card()[100,100,top-left] {
 Children()[100,100,top-left]{}
@@ -371,7 +371,7 @@ Text("inside")[100,100,top-left]{}
     expect(findNodeByComponentId(cardNode!, text!.id)).toBeDefined();
   });
 
-  it('end-to-end: user-page.isdw shape (imported DefaultPageFormat + slot + Table)', () => {
+  it('end-to-end: user-page.idml shape (imported DefaultPageFormat + slot + Table)', () => {
     const pageFormat = `
 define DefaultPageFormat() {
 Row()[100,100,top-left] {
@@ -386,9 +386,9 @@ Children()[100,100,top-left]{}
 }
 `;
 
-    const config = parseIsdw(
+    const config = parseIdml(
       `
-import DefaultPageFormat, Table from "./page-format.isdw"
+import DefaultPageFormat, Table from "./page-format.idml"
 ./admin/users
 DefaultPageFormat()[100,100,top-left] {
 Text("User Management")[20,100,top-left]{}
@@ -411,7 +411,7 @@ Table()[80,100,center]{}
     expect(page.components.filter((c) => c.type === 'Button')).toHaveLength(3);
   });
 
-  it('imports a definition from another .isdw file via resolve()', () => {
+  it('imports a definition from another .idml file via resolve()', () => {
     const lib = `
 define Box() {
 Card()[100,100,top-left] {
@@ -421,9 +421,9 @@ Children()[100,100,top-left]{}
 `;
 
     let resolvedPath: string | undefined;
-    const config = parseIsdw(
+    const config = parseIdml(
       `
-import Box from "./lib.isdw"
+import Box from "./lib.idml"
 ./home
 Box()[100,100,top-left] {
 Text("hi")[100,100,top-left]{}
@@ -437,17 +437,17 @@ Text("hi")[100,100,top-left]{}
       }
     );
 
-    expect(resolvedPath).toBe('./lib.isdw');
+    expect(resolvedPath).toBe('./lib.idml');
     const page = config.pages[0];
     expect(findComponent(page.components, 'Card')).toBeDefined();
     expect(findComponent(page.components, 'Text')?.props?.text).toBe('hi');
   });
 });
 
-describe('isdw parser — strictness rules (hard errors)', () => {
+describe('idml parser — strictness rules (hard errors)', () => {
   it('rejects a comment after code has started (header-only comments)', () => {
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./home
 Text("hi")[100,100,top-left]{}
 # not allowed down here
@@ -457,7 +457,7 @@ Text("hi")[100,100,top-left]{}
 
   it('allows comments in the leading header block', () => {
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 # header line one
 # header line two
 ./home
@@ -468,34 +468,34 @@ Text("hi")[100,100,top-left]{}
 
   it('rejects a line longer than 80 columns', () => {
     const longClasses = 'a'.repeat(90);
-    expect(() => parseIsdw(`./home\nText("${longClasses}")[100,100,top-left]{}`)).toThrow(
+    expect(() => parseIdml(`./home\nText("${longClasses}")[100,100,top-left]{}`)).toThrow(
       /80/
     );
   });
 
   it('rejects the `auto` dimension', () => {
-    expect(() => parseIsdw(`\n./home\nText("hi")[auto,100,top-left]{}\n`)).toThrow(/auto/);
+    expect(() => parseIdml(`\n./home\nText("hi")[auto,100,top-left]{}\n`)).toThrow(/auto/);
   });
 
   it('rejects a missing dimension block', () => {
-    expect(() => parseIsdw(`\n./home\nText("hi"){}\n`)).toThrow(/dimensions/);
+    expect(() => parseIdml(`\n./home\nText("hi"){}\n`)).toThrow(/dimensions/);
   });
 
   it('rejects an inline `<...>` style block', () => {
-    expect(() => parseIsdw(`\n./home\nText("hi")[100,100,top-left]<bold>{}\n`)).toThrow(
+    expect(() => parseIdml(`\n./home\nText("hi")[100,100,top-left]<bold>{}\n`)).toThrow(
       /style blocks are no longer supported/
     );
   });
 
   it('rejects a literal class at a use site', () => {
-    expect(() => parseIsdw(`\n./home\nText("hi")[100,100,top-left]\`text-sm\`{}\n`)).toThrow(
+    expect(() => parseIdml(`\n./home\nText("hi")[100,100,top-left]\`text-sm\`{}\n`)).toThrow(
       /literal class/
     );
   });
 
   it('rejects siblings whose main-axis percentages do not total 100', () => {
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./home
 Col()[100,100,top-left] {
 Text("a")[40,100,top-left]{}
@@ -507,7 +507,7 @@ Text("b")[40,100,top-left]{}
 
   it('rejects a child that does not fill the cross axis', () => {
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./home
 Col()[100,100,top-left] {
 Text("a")[100,50,top-left]{}
@@ -520,7 +520,7 @@ Text("a")[100,50,top-left]{}
     // A chrome widget that is just an Overlay + Modal takes no tiling space, so
     // it can sit beside a full-height sibling without breaking the sum.
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 define FeedbackWidget() {
 Overlay()[100,100,top-left] {
 Button("x", openFeedback)[10,10,bottom-right]{}
@@ -540,7 +540,7 @@ FeedbackWidget()[100,100,top-left]{}
 
   it('accepts an explicit Spacer that fills the gap', () => {
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./home
 Col()[100,100,top-left] {
 Text("a")[40,100,top-left]{}

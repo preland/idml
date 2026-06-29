@@ -8,7 +8,7 @@ export function useSSEConfig(onConfigChange: (config: UIConfig) => void): void {
     fetch('/api/_isd/config')
       .then((r) => r.json())
       .then((raw: unknown) => onConfigChange(raw as UIConfig))
-      .catch((err) => console.error('[isd-ui editor] Failed to reload config:', err));
+      .catch((err) => console.error('[idml editor] Failed to reload config:', err));
   }, [onConfigChange]);
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export function useSSEConfig(onConfigChange: (config: UIConfig) => void): void {
     };
 
     es.onerror = () => {
-      console.warn('[isd-ui editor] SSE connection lost, will retry automatically');
+      console.warn('[idml editor] SSE connection lost, will retry automatically');
     };
 
     return () => es.close();
