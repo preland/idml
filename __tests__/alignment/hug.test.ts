@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 import type { ComponentDef } from '../../src/types';
 import { findChromium, closeBrowser } from './measure';
 
@@ -17,7 +17,7 @@ afterAll(async () => {
 
 /** The ComponentDef of the first component of a given type on page 0. */
 function comp(src: string, type: string): ComponentDef {
-  const c = parseIsdw(src).pages[0].components.find((x) => x.type === type);
+  const c = parseIdml(src).pages[0].components.find((x) => x.type === type);
   if (!c) throw new Error(`no ${type} component`);
   return c;
 }
@@ -33,7 +33,7 @@ Button("Create User", openCreate)[100,100,top-right,hug]{}
 `,
       'Button'
     );
-    expect(b.isdwStyle).toMatchObject({
+    expect(b.idmlStyle).toMatchObject({
       width: 'fit-content',
       maxWidth: '100%',
       minWidth: '0',
@@ -55,9 +55,9 @@ Text("Admin")[100,100,top-left,hug-w]{}
 `,
       'Text'
     );
-    expect(b.isdwStyle).toMatchObject({ width: 'fit-content', textOverflow: 'ellipsis' });
-    expect(b.isdwStyle?.height).toBeUndefined();
-    expect(b.isdwStyle?.maxHeight).toBeUndefined();
+    expect(b.idmlStyle).toMatchObject({ width: 'fit-content', textOverflow: 'ellipsis' });
+    expect(b.idmlStyle?.height).toBeUndefined();
+    expect(b.idmlStyle?.maxHeight).toBeUndefined();
   });
 
   it('hug-h shrinks height only', () => {
@@ -70,13 +70,13 @@ Button("X", noop)[100,100,top-left,hug-h]{}
 `,
       'Button'
     );
-    expect(b.isdwStyle).toMatchObject({ height: 'fit-content', maxHeight: '100%' });
-    expect(b.isdwStyle?.width).toBeUndefined();
+    expect(b.idmlStyle).toMatchObject({ height: 'fit-content', maxHeight: '100%' });
+    expect(b.idmlStyle?.width).toBeUndefined();
   });
 
   it('leaves the element’s tile (cell size) unchanged', () => {
     // The cell still occupies its declared 20%/100% so sibling tiling is intact.
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 Row()[100,100,top-left] {
 Spacer()[100,80,top-left]{}
@@ -89,7 +89,7 @@ Button("Create User", openCreate)[100,20,top-right,hug]{}
   });
 
   it('works through a styled variant and definition expansion', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 PrimaryButton:Button \`px-4 py-2 bg-blue-600\`
 define Bar() {
@@ -100,13 +100,13 @@ Bar()[100,100,top-left]{}
 }
 `);
     const btn = config.pages[0].components.find((c) => c.type === 'Button');
-    expect(btn?.isdwStyle).toMatchObject({ width: 'fit-content', textOverflow: 'ellipsis' });
+    expect(btn?.idmlStyle).toMatchObject({ width: 'fit-content', textOverflow: 'ellipsis' });
   });
 });
 
 describe('hug — container content-flow', () => {
   it('a hug-h container drops its children’s main-axis size (they pack)', () => {
-    const cfg = parseIsdw(`
+    const cfg = parseIdml(`
 ./p
 Col()[100,100,top-left] {
 Col()[100,100,top-left,hug-h] {
@@ -131,7 +131,7 @@ Spacer()[100,100,top-left]{}
     // Two hug-h sections that together are NOWHERE near 100% — allowed because
     // they flow/pack, with the rest of the column as explicit empty space.
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./p
 Col()[100,100,top-left] {
 Col()[10,100,top-left,hug-h] {
@@ -147,7 +147,7 @@ Text("b")[100,100,top-left]{}
 
   it('still enforces strict tiling for ordinary (non-hug) containers', () => {
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./p
 Col()[100,100,top-left] {
 Col()[10,100,top-left]{}
@@ -167,7 +167,7 @@ describe('hug — invalid placements are rejected', () => {
   ];
   for (const [label, src] of cases) {
     it(`throws for hug on ${label}`, () => {
-      expect(() => parseIsdw(src)).toThrow(/cannot use hug|hug applies/);
+      expect(() => parseIdml(src)).toThrow(/cannot use hug|hug applies/);
     });
   }
 
@@ -175,7 +175,7 @@ describe('hug — invalid placements are rejected', () => {
   // gives a content-height card (no dead space below the last row) by dropping
   // the fixed height while keeping the tiled width.
   it('hug-h on a Table drops its fixed height (content-height card)', () => {
-    const layout = parseIsdw(
+    const layout = parseIdml(
       `./p\nCol()[100,100,top-left]{\nTable(@r)[90,100,top-left,hug-h]{\nColumn("A")[10,100,top-left]{Text(@item.a)[100,100,top-left]{}}\n}\n}`
     ).pages[0].layout;
     const findTable = (n: any): any => {
@@ -193,7 +193,7 @@ describe('hug — invalid placements are rejected', () => {
   });
 
   it('throws on an unknown sizing keyword', () => {
-    expect(() => parseIsdw(`./p\nCol()[100,100,top-left]{\nText("x")[100,100,top-left,squish]{}\n}`)).toThrow(
+    expect(() => parseIdml(`./p\nCol()[100,100,top-left]{\nText("x")[100,100,top-left,squish]{}\n}`)).toThrow(
       /unknown sizing keyword/
     );
   });

@@ -1,7 +1,7 @@
 {
-  "name": "vscode-isdw",
-  "displayName": "ISDW",
-  "description": "Syntax highlighting for .isdw files (the isd-ui config DSL).",
+  "name": "vscode-idml",
+  "displayName": "IDML",
+  "description": "Syntax highlighting for .idml files (the idml config DSL).",
   "version": "0.0.1",
   "license": "MIT",
   "publisher": "isd",
@@ -21,22 +21,22 @@
   "contributes": {
     "languages": [
       {
-        "id": "isdw",
+        "id": "idml",
         "aliases": [
-          "ISDW",
-          "isdw"
+          "IDML",
+          "idml"
         ],
         "extensions": [
-          ".isdw"
+          ".idml"
         ],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "isdw",
-        "scopeName": "source.isdw",
-        "path": "./syntaxes/isdw.tmLanguage.json"
+        "language": "idml",
+        "scopeName": "source.idml",
+        "path": "./syntaxes/idml.tmLanguage.json"
       }
     ]
   }

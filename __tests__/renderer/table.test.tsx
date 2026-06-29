@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 const TABLE_PAGE = `
 ./admin/users
@@ -17,7 +17,7 @@ Button("Edit", editUser)[100,100,top-left]{}
 
 describe('Table', () => {
   it('renders column headers and one row of cells per data item', async () => {
-    const config = parseIsdw(TABLE_PAGE);
+    const config = parseIdml(TABLE_PAGE);
 
     render(
       <ConfigProvider

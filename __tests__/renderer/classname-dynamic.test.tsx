@@ -2,13 +2,13 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 describe('dynamic className binding (@method in a class block)', () => {
   it('merges static classes with a resolved dynamic class', async () => {
     // Static classes live in the variant; the use site adds ONLY a dynamic
     // @binding (literal classes at a use site are rejected).
-    const config = parseIsdw(`
+    const config = parseIdml(`
 Badge:Text \`px-2 rounded\`
 ./home
 Badge("Admin")[100,100,top-left]\`@badgeClass\`{}
@@ -23,7 +23,7 @@ Badge("Admin")[100,100,top-left]\`@badgeClass\`{}
   });
 
   it('resolves a different class per Repeat row from the row item', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 RoleText:Text \`badge\`
 ./home
 Repeat(@rows)[100,100,top-left] {

@@ -1,4 +1,4 @@
-// Ad-hoc grammar check: tokenize sample .isdw lines and print the scopes so we
+// Ad-hoc grammar check: tokenize sample .idml lines and print the scopes so we
 // can eyeball that each token gets a sensible TextMate scope. Run from the
 // extension dir: `node scripts/tokenize-check.mjs`
 import { readFileSync } from 'node:fs';
@@ -24,8 +24,8 @@ const registry = new vsctm.Registry({
   onigLib: vscodeOnigurumaLib,
   loadGrammar: async () =>
     vsctm.parseRawGrammar(
-      readFileSync(join(root, 'syntaxes/isdw.tmLanguage.json'), 'utf8'),
-      'isdw.tmLanguage.json'
+      readFileSync(join(root, 'syntaxes/idml.tmLanguage.json'), 'utf8'),
+      'idml.tmLanguage.json'
     ),
 });
 
@@ -33,7 +33,7 @@ const sample = [
   '# header comment',
   './test/users[scroll]',
   'NavLink:Button `flex items-center text-gray-800`',
-  'import NavLink, NavBtn from "./styles.isdw"',
+  'import NavLink, NavBtn from "./styles.idml"',
   'define TopBar(title) {',
   '  Text(@buildSha)[auto,100,center-left]`text-xs`{}',
   '  Button("Save", saveUser)[20,10,top-right]<bg=#1a56db pad=2>{}',
@@ -42,7 +42,7 @@ const sample = [
   '}',
 ];
 
-const grammar = await registry.loadGrammar('source.isdw');
+const grammar = await registry.loadGrammar('source.idml');
 let ruleStack = vsctm.INITIAL;
 for (const line of sample) {
   const r = grammar.tokenizeLine(line, ruleStack);

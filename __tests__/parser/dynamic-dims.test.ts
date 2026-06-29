@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 import type { LayoutDef } from '../../src/types';
 
 // A `@ref` dimension is parsed into `dynamicSize` (resolved per render), the
@@ -10,9 +10,9 @@ function child(layout: LayoutDef, i: number): LayoutDef {
   return layout.children[i];
 }
 
-describe('isdw parser — dynamic (@ref) dimensions', () => {
+describe('idml parser — dynamic (@ref) dimensions', () => {
   it('parses a @ref width into dynamicSize and drops the static width', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Row()[100,100,top-left] {
 Col()[100,@sidebarW,top-left]{}
@@ -31,7 +31,7 @@ Col()[100,@contentW,top-left]{}
   it('tolerates a dynamic-width sibling without a tiling sum error', () => {
     // 13.5 + (dynamic) does not statically sum to 100, but must not throw.
     expect(() =>
-      parseIsdw(`
+      parseIdml(`
 ./home
 Row()[100,100,top-left] {
 Col()[100,@sidebarW,top-left]{}
@@ -42,7 +42,7 @@ Col()[100,86.5,top-left]{}
   });
 
   it('supports a @state path as a dimension ref', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Row()[100,100,top-left] {
 Col()[100,@state.w,top-left]{}
@@ -53,9 +53,9 @@ Col()[100,@state.rest,top-left]{}
   });
 });
 
-describe('isdw parser — conditional dim & class', () => {
+describe('idml parser — conditional dim & class', () => {
   it('parses `@ref ? A : B` dim into whenTrue/whenFalse', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Row()[100,100,top-left] {
 Col()[100,@state.collapsed ? 3.4vw : 13.5vw,top-left]{}
@@ -66,7 +66,7 @@ Col()[100,@state.collapsed ? 3.4vw : 13.5vw,top-left]{}
   });
 
   it('bare numbers in a conditional dim become percentages', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Row()[100,100,top-left] {
 Col()[100,@state.collapsed ? 100 : 20,top-left]{}
@@ -77,7 +77,7 @@ Col()[100,@state.collapsed ? 100 : 20,top-left]{}
   });
 
   it('parses a conditional class block `\`x\`?@ref` onto a container', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./home
 Col()[100,100,top-left]
 \`scale-100 opacity-100\`?@state.open

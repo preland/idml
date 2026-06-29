@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 import type { LayoutDef } from '../../src/types';
 
 // NOTE: snippets are written flush-left (no indentation) so the strict
@@ -14,7 +14,7 @@ import type { LayoutDef } from '../../src/types';
 
 /** First page's root layout for a parsed source. */
 function root(src: string): LayoutDef {
-  return parseIsdw(src).pages[0].layout;
+  return parseIdml(src).pages[0].layout;
 }
 
 /** Depth-first list of every layout node (root included). */
@@ -34,7 +34,7 @@ function dims(node: LayoutDef): { height?: number; width?: number } {
  * component id the converter assigns (ids are `<type-lowercase>-N`).
  */
 function nodeForComponent(
-  config: ReturnType<typeof parseIsdw>,
+  config: ReturnType<typeof parseIdml>,
   page: number,
   type: string
 ): LayoutDef | undefined {
@@ -143,7 +143,7 @@ Col()[50,100,center-left]{}
 
 describe('alignment — definition expansion preserves sizes', () => {
   it('uses the call-site dims on the wrapper, body dims inside', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 define Panel() {
 Col()[25,100,top-left]{}
@@ -167,7 +167,7 @@ Panel()[60,100,top-left]{}
   });
 
   it('preserves slot (Children) content sizes when threaded in', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 define Frame() {
 Col()[100,100,top-left] {
@@ -192,7 +192,7 @@ Col()[65,100,top-left]{}
 
 describe('alignment — Table sugar preserves column widths', () => {
   it('keeps the table own dims and each column width', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 Col()[100,100,top-left] {
 Table(@rows)[100,100,top-left] {
@@ -219,7 +219,7 @@ Text(@item.b)[100,100,top-left]{}
 
 describe('alignment — out-of-flow nodes take no flow space', () => {
   it('marks a Modal with display:contents while keeping siblings tiling', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 Col()[100,100,top-left] {
 Col()[100,100,top-left]{}
@@ -231,17 +231,17 @@ Text("hi")[100,100,top-left]{}
     const modal = nodeForComponent(config, 0, 'Modal');
     expect(modal).toBeDefined();
     // Out-of-flow ⇒ rendered with display:contents so it occupies no flow space.
-    expect(modal!.isdwStyle?.display).toBe('contents');
+    expect(modal!.idmlStyle?.display).toBe('contents');
     // The in-flow sibling still declares the full 100% it tiles to.
     const inner = config.pages[0].layout.children[0];
     const inFlow = inner.children.find(
-      (c) => c.isdwStyle?.display !== 'contents'
+      (c) => c.idmlStyle?.display !== 'contents'
     );
     expect(dims(inFlow!)).toEqual({ height: 100, width: 100 });
   });
 
   it('treats an out-of-flow definition the same way', () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 ./p
 define Chrome() {
 Overlay()[100,100,top-left] {
@@ -260,7 +260,7 @@ Chrome()[100,100,top-left]{}
     // 100%-tall body sibling is valid beside it.
     const inner = config.pages[0].layout.children[0];
     const chromeWrapper = inner.children.find(
-      (c) => c.isdwStyle?.display === 'contents'
+      (c) => c.idmlStyle?.display === 'contents'
     );
     expect(chromeWrapper).toBeDefined();
   });

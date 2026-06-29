@@ -2,11 +2,11 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 describe('className bridge', () => {
   it('applies a variant class to the rendered element', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 Saver:Button \`px-3 py-2 bg-blue-600 rounded\`
 ./home
 Saver("Save", null)[100,100,top-right]{}
@@ -21,7 +21,7 @@ Saver("Save", null)[100,100,top-right]{}
   });
 
   it('applies a variant class to a Row container (alongside the flex class)', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
 Bar:Row \`gap-4 border-b\`
 ./home
 Bar()[100,100,top-left] {

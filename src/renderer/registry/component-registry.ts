@@ -6,7 +6,7 @@ const registry = new Map<string, RegisteredComponent>();
 
 export function registerComponent(name: string, component: RegisteredComponent): void {
   if (registry.has(name)) {
-    console.warn(`[isd-ui] registerComponent: overwriting existing component "${name}"`);
+    console.warn(`[idml] registerComponent: overwriting existing component "${name}"`);
   }
   registry.set(name, component);
 }

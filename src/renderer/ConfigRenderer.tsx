@@ -14,7 +14,7 @@ export function ConfigRenderer({ page }: ConfigRendererProps): React.ReactElemen
   const pageDef = config.pages.find((p) => p.route === page);
 
   if (!pageDef) {
-    console.warn(`[isd-ui] No page found for route "${page}"`);
+    console.warn(`[idml] No page found for route "${page}"`);
     return null;
   }
 

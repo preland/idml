@@ -30,7 +30,7 @@ export interface FlexDef {
   size?: SizeDef;
   children: LayoutDef[];
   componentId?: string;
-  isdwStyle?: Record<string, string>;
+  idmlStyle?: Record<string, string>;
   className?: string;
   /** Dynamic `@method` class refs (resolved per render, like a component's, so a
    *  container can carry a state-driven class — e.g. a per-row colour). */
@@ -50,7 +50,7 @@ export interface LayoutVisibility {
 
 /** A class block that applies only when `ref` is truthy (`negate` flips it) —
  *  i.e. `` `scale-100 opacity-100`?@state.open ``. Lets state-driven visuals (a
- *  pop-up's scale/opacity) live in the .isdw rather than a method. */
+ *  pop-up's scale/opacity) live in the .idml rather than a method. */
 export interface ConditionalClass {
   classes: string;
   ref: string;
@@ -67,7 +67,7 @@ export interface DynamicSize {
 
 /** One reactive dimension. `ref` is a value path (`state.x` / method). With
  *  `whenTrue`/`whenFalse` it's a condition — the dim is `whenTrue` when the ref
- *  is truthy, else `whenFalse` (both inline CSS sizes from the .isdw). Without
+ *  is truthy, else `whenFalse` (both inline CSS sizes from the .idml). Without
  *  them the ref's resolved value is the dim (bare number → `%`). */
 export interface DynamicDim {
   ref: string;
@@ -83,7 +83,7 @@ export interface GridDef {
   size?: SizeDef;
   children: LayoutDef[];
   componentId?: string;
-  isdwStyle?: Record<string, string>;
+  idmlStyle?: Record<string, string>;
   className?: string;
   /** Dynamic `@method` class refs (resolved per render, like a component's, so a
    *  container can carry a state-driven class — e.g. a per-row colour). */

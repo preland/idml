@@ -14,7 +14,7 @@
     "jsx": "react-jsx",
     "incremental": false,
     "paths": {
-      "@isd-ui/*": ["./src/*"]
+      "@idml/*": ["./src/*"]
     }
   },
   "include": [

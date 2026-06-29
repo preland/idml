@@ -1,4 +1,4 @@
-# page-format.isdw
+# page-format.idml
 # Shared chrome for every page: a sidebar with logout + feedback buttons, and an
 # empty region (the Children slot) that each page fills with its own content.
 # `logout` and `openFeedback` are bare identifiers, so they bind to registered

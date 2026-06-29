@@ -1,10 +1,10 @@
-# user-page.isdw
+# user-page.idml
 # You can define new primitives elsewhere and import them. DefaultPageFormat is
 # the shared chrome (sidebar + logout + feedback + an empty region filled by the
 # page content). The page body below tiles its column to 100%: the header takes
 # 20% of the height, the content Col the remaining 80%.
 
-import DefaultPageFormat,Table from "./page-format.isdw"
+import DefaultPageFormat,Table from "./page-format.idml"
 
 ./admin/users
 DefaultPageFormat()[100,100,top-left] {

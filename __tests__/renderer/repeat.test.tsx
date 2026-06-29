@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 const REPEAT_PAGE = `
   ./home
@@ -13,7 +13,7 @@ const REPEAT_PAGE = `
 
 describe('Repeat (iteration)', () => {
   it('renders one row per data item, resolving @item fields', async () => {
-    const config = parseIsdw(REPEAT_PAGE);
+    const config = parseIdml(REPEAT_PAGE);
 
     render(
       <ConfigProvider
@@ -37,7 +37,7 @@ describe('Repeat (iteration)', () => {
       return u;
     };
 
-    const config = parseIsdw(REPEAT_PAGE);
+    const config = parseIdml(REPEAT_PAGE);
     render(
       <ConfigProvider config={config} methods={[{ id: 'users', fn: useUsers }]}>
         <ConfigRenderer page="/home" />
@@ -52,7 +52,7 @@ describe('Repeat (iteration)', () => {
   });
 
   it('renders nothing for an empty/missing data array (no crash)', async () => {
-    const config = parseIsdw(REPEAT_PAGE);
+    const config = parseIdml(REPEAT_PAGE);
     render(
       <ConfigProvider config={config} methods={[{ id: 'users', fn: () => [] }]}>
         <ConfigRenderer page="/home" />

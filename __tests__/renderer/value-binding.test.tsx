@@ -2,11 +2,11 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 
 describe('reactive value bindings', () => {
   it('renders a value-bound prop from a registered method', async () => {
-    const config = parseIsdw(`
+    const config = parseIdml(`
       ./home
       Text(@greeting)[100,100,top-left]{}
     `);
@@ -30,7 +30,7 @@ describe('reactive value bindings', () => {
       return v;
     };
 
-    const config = parseIsdw(`
+    const config = parseIdml(`
       ./home
       Text(@greeting)[100,100,top-left]{}
     `);

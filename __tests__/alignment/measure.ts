@@ -14,7 +14,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { execSync } from 'node:child_process';
 import type { Browser } from 'puppeteer-core';
-import { parseIsdw } from '../../src/parser/isdw-parser';
+import { parseIdml } from '../../src/parser/idml-parser';
 import { ConfigContext } from '../../src/renderer/ConfigProvider';
 import { LayoutRenderer } from '../../src/renderer/LayoutRenderer';
 import type { UIConfig } from '../../src/types';
@@ -105,11 +105,11 @@ export async function closeBrowser(): Promise<void> {
 export interface MeasureOptions {
   exe: string;
   viewport?: { width: number; height: number };
-  /** `resolve` for `import`s inside the .isdw source (multi-file fixtures). */
+  /** `resolve` for `import`s inside the .idml source (multi-file fixtures). */
   resolve?: (path: string) => string;
 }
 
-/** Parse `.isdw`, render it for real, and return the measured layout tree. */
+/** Parse `.idml`, render it for real, and return the measured layout tree. */
 export async function measure(source: string, opts: MeasureOptions): Promise<Measured> {
   return measureDom(source, opts, () => {
     const walk = (el: Element): Measured => {
@@ -127,7 +127,7 @@ export async function measure(source: string, opts: MeasureOptions): Promise<Mea
 }
 
 /**
- * Render a `.isdw` source for real in Chromium and run an arbitrary in-page
+ * Render a `.idml` source for real in Chromium and run an arbitrary in-page
  * probe against the live DOM, returning whatever it produces. Used for bespoke
  * measurements (e.g. a specific element's computed styles) the generic tree
  * walker doesn't capture.
@@ -138,7 +138,7 @@ export async function measureDom<T>(
   probe: () => T
 ): Promise<T> {
   const viewport = opts.viewport ?? { width: 1000, height: 1000 };
-  const config = parseIsdw(source, opts.resolve ? { resolve: opts.resolve } : undefined);
+  const config = parseIdml(source, opts.resolve ? { resolve: opts.resolve } : undefined);
   const browser = await getBrowser(opts.exe);
   const page = await browser.newPage();
   try {

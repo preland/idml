@@ -6,7 +6,7 @@ import type { PercentageString, DynamicSize, DynamicDim } from '../types/layout.
 // A dimension is a static percentage number, or a `@ref` value-binding (resolved
 // per render to a dimension) so a cell can resize on state — e.g. a sidebar that
 // narrows when collapsed. A `@ref ? A : B` form picks A/B from the ref's
-// truthiness so the two sizes (the visual values) live in the .isdw, not in a
+// truthiness so the two sizes (the visual values) live in the .idml, not in a
 // method. (`'auto'` is gone; see parseDimension.)
 type DimRef = { ref: string; whenTrue?: string; whenFalse?: string };
 // `'auto'` is internal-only (table expansion uses it for content-height); the
@@ -28,11 +28,11 @@ interface HugSpec {
 // An argument value in a component call. Bare identifiers become tagged strings
 // (FN_REF_PREFIX = handler, VALUE_REF_PREFIX = reactive value binding); `null`,
 // booleans, numbers and strings are literals; a `{ }` block is a children marker.
-type IsdwArg = string | number | boolean | null | Record<string, unknown>;
+type IdmlArg = string | number | boolean | null | Record<string, unknown>;
 
 interface ParsedItem {
   name: string;
-  args: IsdwArg[];
+  args: IdmlArg[];
   height: DimValue;
   width: DimValue;
   anchor: string;
@@ -67,7 +67,7 @@ interface ParsedPage {
 
 interface StyleEntry {
   baseType: string;
-  defaultArgs: IsdwArg[];
+  defaultArgs: IdmlArg[];
   style: Record<string, string>;
   /** Utility (Tailwind) classes baked into this styled variant. */
   className?: string;
@@ -134,7 +134,7 @@ function validateSource(source: string): void {
     const lineNo = idx + 1;
     if (line.length > MAX_LINE_WIDTH) {
       throw new Error(
-        `[isdw] line ${lineNo} is ${line.length} columns; the limit is ${MAX_LINE_WIDTH}`
+        `[idml] line ${lineNo} is ${line.length} columns; the limit is ${MAX_LINE_WIDTH}`
       );
     }
     const trimmed = line.trim();
@@ -142,7 +142,7 @@ function validateSource(source: string): void {
     if (trimmed.startsWith('#')) {
       if (codeStarted) {
         throw new Error(
-          `[isdw] line ${lineNo}: comments are only allowed in the header block ` +
+          `[idml] line ${lineNo}: comments are only allowed in the header block ` +
             `at the very top of the file, before any code`
         );
       }
@@ -212,7 +212,7 @@ function tokenize(source: string): Token[] {
     // named styled variants (Name:BaseType). Reject them explicitly.
     if (stripped[i] === '<') {
       throw new Error(
-        '[isdw] inline `<...>` style blocks are no longer supported; ' +
+        '[idml] inline `<...>` style blocks are no longer supported; ' +
           'declare a styled variant (Name:BaseType) and apply it instead'
       );
     }
@@ -264,7 +264,7 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    throw new Error(`[isdw] Unexpected character '${stripped[i]}' at position ${i}`);
+    throw new Error(`[idml] Unexpected character '${stripped[i]}' at position ${i}`);
   }
 
   return tokens;
@@ -312,7 +312,7 @@ const BUILTIN_NAMES = new Set([
   'Overlay', 'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
 ]);
 
-class IsdwParser {
+class IdmlParser {
   private tokens: Token[];
   private pos = 0;
   styleRegistry: Map<string, StyleEntry> = new Map();
@@ -333,14 +333,14 @@ class IsdwParser {
 
   private consume(type?: TokenType): Token {
     const t = this.tokens[this.pos++];
-    if (!t) throw new Error('[isdw] Unexpected end of input');
+    if (!t) throw new Error('[idml] Unexpected end of input');
     if (type && t.type !== type) {
-      throw new Error(`[isdw] Expected ${type}, got ${t.type} ("${t.value}")`);
+      throw new Error(`[idml] Expected ${type}, got ${t.type} ("${t.value}")`);
     }
     return t;
   }
 
-  // Entry point. resolve() is called to load imported .isdw files.
+  // Entry point. resolve() is called to load imported .idml files.
   parseFile(resolve?: (path: string) => string): ParsedPage[] {
     this.parseImports(resolve);
     this.parseTopDecls();
@@ -379,7 +379,7 @@ class IsdwParser {
   // Consume import lines. Two forms:
   //   import "path"                  (whole-file style/def import)
   //   import Name, Name from "path"  (named component/def import)
-  // In both cases the referenced .isdw file is parsed and its definitions +
+  // In both cases the referenced .idml file is parsed and its definitions +
   // style-defs are registered into the shared registries.
   private parseImports(resolve?: (path: string) => string): void {
     while (this.peek(0)?.type === 'IDENT' && this.peek(0)?.value === 'import') {
@@ -403,7 +403,7 @@ class IsdwParser {
         }
         const fromTok = this.consume('IDENT');
         if (fromTok.value !== 'from') {
-          throw new Error(`[isdw] Expected 'from' in import, got "${fromTok.value}"`);
+          throw new Error(`[idml] Expected 'from' in import, got "${fromTok.value}"`);
         }
         const importPath = this.consume('STRING').value as string;
         this.resolveImport(importPath, names, resolve);
@@ -414,23 +414,23 @@ class IsdwParser {
     }
   }
 
-  // Resolve and parse an imported .isdw file into the shared registries.
+  // Resolve and parse an imported .idml file into the shared registries.
   // `names`, when non-empty, are validated against what the file actually defines.
   private resolveImport(
     importPath: string,
     names: string[],
     resolve?: (path: string) => string
   ): void {
-    // Only .isdw (or extension-less) imports are resolvable here. Other imports
+    // Only .idml (or extension-less) imports are resolvable here. Other imports
     // (e.g. .ts/.tsx) are documentation-only at parse time.
     const afterLastSlash = importPath.slice(importPath.lastIndexOf('/') + 1);
     const dotIdx = afterLastSlash.lastIndexOf('.');
     const ext = dotIdx >= 0 ? afterLastSlash.slice(dotIdx) : '';
-    if (ext !== '.isdw' && ext !== '') return;
+    if (ext !== '.idml' && ext !== '') return;
     if (!resolve) return;
 
     const src = resolve(importPath);
-    const sub = new IsdwParser(tokenize(src));
+    const sub = new IdmlParser(tokenize(src));
     sub.styleRegistry = this.styleRegistry; // share registries
     sub.defRegistry = this.defRegistry;
     sub.defParamRegistry = this.defParamRegistry;
@@ -443,7 +443,7 @@ class IsdwParser {
         !this.styleRegistry.has(name) &&
         !BUILTIN_NAMES.has(name)
       ) {
-        console.warn(`[isdw] import: "${name}" is not defined in ${importPath}`);
+        console.warn(`[idml] import: "${name}" is not defined in ${importPath}`);
       }
     }
   }
@@ -510,7 +510,7 @@ class IsdwParser {
       const baseType = this.consume('IDENT').value as string;
 
       // Optional pre-set args: Name:Type("arg1", "arg2") { ... }
-      const defaultArgs: IsdwArg[] = [];
+      const defaultArgs: IdmlArg[] = [];
       if (this.peek()?.type === 'LPAREN') {
         this.consume('LPAREN');
         if (this.peek()?.type !== 'RPAREN') defaultArgs.push(...this.parseArgList());
@@ -549,7 +549,7 @@ class IsdwParser {
   // Parse a value token inside a style def body.
   private parseStyleValue(): string {
     const t = this.peek();
-    if (!t) throw new Error('[isdw] Expected style value');
+    if (!t) throw new Error('[idml] Expected style value');
 
     if (t.type === 'COLOR') { this.pos++; return t.value as string; }
 
@@ -565,7 +565,7 @@ class IsdwParser {
 
     if (t.type === 'IDENT') { this.pos++; return t.value as string; }
 
-    throw new Error(`[isdw] Unexpected token type ${t.type} as style value`);
+    throw new Error(`[idml] Unexpected token type ${t.type} as style value`);
   }
 
   parseItem(): ParsedItem {
@@ -577,17 +577,17 @@ class IsdwParser {
 
     // Args are always required: Name(arg, ...) or Name()
     this.consume('LPAREN');
-    const parsedArgs: IsdwArg[] = [];
+    const parsedArgs: IdmlArg[] = [];
     if (this.peek()?.type !== 'RPAREN') parsedArgs.push(...this.parseArgList());
     this.consume('RPAREN');
 
     // Lift any `{ ... }` children-block args out of the arg list; they become
     // part of this item's children (merged with the trailing `{ }` block below).
     const inlineChildren: ParsedItem[] = [];
-    const valueArgs: IsdwArg[] = [];
+    const valueArgs: IdmlArg[] = [];
     for (const a of parsedArgs) {
-      if (a && typeof a === 'object' && Array.isArray((a as Record<string, unknown>).__isdwChildren)) {
-        inlineChildren.push(...((a as { __isdwChildren: ParsedItem[] }).__isdwChildren));
+      if (a && typeof a === 'object' && Array.isArray((a as Record<string, unknown>).__idmlChildren)) {
+        inlineChildren.push(...((a as { __idmlChildren: ParsedItem[] }).__idmlChildren));
       } else {
         valueArgs.push(a);
       }
@@ -601,7 +601,7 @@ class IsdwParser {
     // every element must declare exactly how much space it occupies.
     if (this.peek()?.type !== 'LBRACKET') {
       throw new Error(
-        `[isdw] "${rawName}" is missing its required [height,width,anchor] ` +
+        `[idml] "${rawName}" is missing its required [height,width,anchor] ` +
           `dimensions`
       );
     }
@@ -622,7 +622,7 @@ class IsdwParser {
       else if (kw === 'hug-h') hug = { w: false, h: true };
       else
         throw new Error(
-          `[isdw] unknown sizing keyword "${kw}" for "${rawName}"; ` +
+          `[idml] unknown sizing keyword "${kw}" for "${rawName}"; ` +
             `expected hug, hug-w, or hug-h`
         );
     }
@@ -650,7 +650,7 @@ class IsdwParser {
       // Optional trailing condition `?@ref` / `?!@ref`: these classes apply only
       // when the ref is truthy / falsy. A CONDITIONAL block may use literal
       // classes — it expresses a state-driven visual (e.g. a pop-up's scale/
-      // opacity), which belongs in the .isdw, not a method.
+      // opacity), which belongs in the .idml, not a method.
       if (this.peek()?.type === 'QUESTION') {
         this.consume('QUESTION');
         let negate = false;
@@ -663,7 +663,7 @@ class IsdwParser {
       for (const tok of cls.split(/\s+/).filter(Boolean)) {
         if (!tok.startsWith('@')) {
           throw new Error(
-            `[isdw] literal class "${tok}" is not allowed at a use site; ` +
+            `[idml] literal class "${tok}" is not allowed at a use site; ` +
               `declare a styled variant (Name:BaseType) instead`
           );
         }
@@ -699,7 +699,7 @@ class IsdwParser {
   private parseDimension(): DimValue {
     if (this.peek()?.type === 'IDENT' && this.peek()?.value === 'auto') {
       throw new Error(
-        '[isdw] the `auto` dimension is no longer supported; give an explicit ' +
+        '[idml] the `auto` dimension is no longer supported; give an explicit ' +
           'percentage (use a Spacer for any intentional empty space)'
       );
     }
@@ -732,8 +732,8 @@ class IsdwParser {
     return `${n}%`;
   }
 
-  private parseArgList(): IsdwArg[] {
-    const args: IsdwArg[] = [];
+  private parseArgList(): IdmlArg[] {
+    const args: IdmlArg[] = [];
     args.push(this.parseArg());
     while (this.peek()?.type === 'COMMA') {
       this.pos++;
@@ -743,9 +743,9 @@ class IsdwParser {
     return args;
   }
 
-  private parseArg(): IsdwArg {
+  private parseArg(): IdmlArg {
     const t = this.peek();
-    if (!t) throw new Error('[isdw] Expected argument');
+    if (!t) throw new Error('[idml] Expected argument');
     if (t.type === 'STRING') { this.pos++; return t.value as string; }
     if (t.type === 'NUMBER') { this.pos++; return t.value as number; }
     // @method — reactive value binding (prop bound to the method's return value).
@@ -771,9 +771,9 @@ class IsdwParser {
         childItems.push(this.parseItem());
       }
       this.consume('RBRACE');
-      return { __isdwChildren: childItems };
+      return { __idmlChildren: childItems };
     }
-    throw new Error(`[isdw] Unexpected token type ${t.type} as argument`);
+    throw new Error(`[idml] Unexpected token type ${t.type} as argument`);
   }
 }
 
@@ -848,22 +848,22 @@ interface ConvertCtx {
  * bound value is whatever the caller passed in that position (a literal, another
  * ref, etc.), so values also thread through nested definition calls.
  */
-function substituteParams(item: ParsedItem, bindings: Map<string, IsdwArg>): ParsedItem {
+function substituteParams(item: ParsedItem, bindings: Map<string, IdmlArg>): ParsedItem {
   if (bindings.size === 0) return item;
-  const subArg = (a: IsdwArg): IsdwArg => {
+  const subArg = (a: IdmlArg): IdmlArg => {
     if (typeof a === 'string') {
       for (const prefix of [FN_REF_PREFIX, VALUE_REF_PREFIX, MODEL_REF_PREFIX]) {
         if (a.startsWith(prefix)) {
           const name = a.slice(prefix.length);
-          return bindings.has(name) ? (bindings.get(name) as IsdwArg) : a;
+          return bindings.has(name) ? (bindings.get(name) as IdmlArg) : a;
         }
       }
       return a;
     }
-    if (a && typeof a === 'object' && Array.isArray((a as { __isdwChildren?: ParsedItem[] }).__isdwChildren)) {
+    if (a && typeof a === 'object' && Array.isArray((a as { __idmlChildren?: ParsedItem[] }).__idmlChildren)) {
       return {
-        __isdwChildren: (a as { __isdwChildren: ParsedItem[] }).__isdwChildren.map(c => substituteParams(c, bindings)),
-      } as IsdwArg;
+        __idmlChildren: (a as { __idmlChildren: ParsedItem[] }).__idmlChildren.map(c => substituteParams(c, bindings)),
+      } as IdmlArg;
     }
     return a;
   };
@@ -960,14 +960,14 @@ function validateTiling(
     // `@ref` cross dim is dynamic — both opt out of the fill-the-cross-axis rule.
     if (!c.hug?.[crossKey] && !isDimRef(c[cross]) && (c[cross] as number) !== 100) {
       throw new Error(
-        `[isdw] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
+        `[idml] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
           `(got ${c[cross]}); no vacant space is allowed`
       );
     }
   }
   if (!packsMain && sum !== 100) {
     throw new Error(
-      `[isdw] children of ${where} must tile to 100% along ${main}; got ${sum}. ` +
+      `[idml] children of ${where} must tile to 100% along ${main}; got ${sum}. ` +
         `Add an explicit Spacer for any gap.`
     );
   }
@@ -1061,7 +1061,7 @@ function assertHuggable(item: ParsedItem, isDef: boolean): void {
   if (!item.hug) return;
   if (HUG_INVALID_ON.has(item.name) || isDef) {
     throw new Error(
-      `[isdw] "${item.name}" cannot use hug — nothing to content-size here. ` +
+      `[idml] "${item.name}" cannot use hug — nothing to content-size here. ` +
         `hug applies to components (e.g. Button/Text) and layout containers ` +
         `(Row/Col/Form), not definitions, slots, tables, or out-of-flow layers.`
     );
@@ -1070,7 +1070,7 @@ function assertHuggable(item: ParsedItem, isDef: boolean): void {
 
 function mkItem(
   name: string,
-  args: IsdwArg[],
+  args: IdmlArg[],
   height: DimValue,
   width: DimValue,
   anchor: string,
@@ -1161,14 +1161,14 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
 function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   assertHuggable(item, ctx.defs.has(item.name));
   const size = sizeOf(item);
-  const isdwStyle = Object.keys(item.style).length ? item.style : undefined;
+  const idmlStyle = Object.keys(item.style).length ? item.style : undefined;
   const colAnchor = anchorToFlexProps(item.anchor, 'column');
   // Out-of-flow nodes (Modal / out-of-flow defs) render with `display:contents`
   // so their wrapper cell occupies NO flow space (their real content is a portal
   // or fixed layer). This means authors don't have to fake a 0 height for them.
   // (Overlay has its own branch below; its layer is already position:fixed.)
   const outOfFlow = ctx.isOutOfFlow(item.name);
-  const cellStyle = outOfFlow ? { ...(isdwStyle ?? {}), display: 'contents' } : isdwStyle;
+  const cellStyle = outOfFlow ? { ...(idmlStyle ?? {}), display: 'contents' } : idmlStyle;
 
   // `Children` slot marker — replaced by the enclosing definition's call children.
   if (item.name === 'Children') {
@@ -1181,7 +1181,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       ...colAnchor,
       size,
       children: slot.map(child => convertItem(child, childCtx)),
-      isdwStyle,
+      idmlStyle,
     };
   }
 
@@ -1193,7 +1193,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     // substitute references in the body (missing args bind to '' so they render
     // empty rather than leaking the param name).
     const params = ctx.defParams.get(item.name) ?? [];
-    const bindings = new Map<string, IsdwArg>();
+    const bindings = new Map<string, IdmlArg>();
     params.forEach((p, i) => bindings.set(p, item.args[i] ?? ''));
     const body = bindings.size ? defBody.map(t => substituteParams(t, bindings)) : defBody;
 
@@ -1208,7 +1208,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       ...colAnchor,
       size,
       children: body.map(t => convertItem(t, innerCtx)),
-      isdwStyle: cellStyle,
+      idmlStyle: cellStyle,
     };
   }
 
@@ -1234,8 +1234,8 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       }
       return {
         ...layout,
-        isdwStyle: {
-          ...(layout.isdwStyle ?? {}),
+        idmlStyle: {
+          ...(layout.idmlStyle ?? {}),
           position: 'absolute',
           pointerEvents: 'auto',
           ...anchorToAbsoluteInsets(child.anchor),
@@ -1248,7 +1248,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       direction: 'column',
       size: { width: '100%', height: '100%' },
       children,
-      isdwStyle: {
+      idmlStyle: {
         position: 'fixed',
         top: '0',
         left: '0',
@@ -1257,7 +1257,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
         pointerEvents: 'none',
         outline: 'none',
         zIndex: '50',
-        ...(isdwStyle ?? {}),
+        ...(idmlStyle ?? {}),
       },
       ...(item.className ? { className: item.className } : {}),
     };
@@ -1288,8 +1288,8 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     }
     const crossHug = direction === 'column' ? item.hug?.w : item.hug?.h;
     const containerStyle = crossHug
-      ? { ...(isdwStyle ?? {}), ...hugContainerStyles({ w: direction === 'column', h: direction === 'row' }) }
-      : isdwStyle;
+      ? { ...(idmlStyle ?? {}), ...hugContainerStyles({ w: direction === 'column', h: direction === 'row' }) }
+      : idmlStyle;
     return {
       type: 'flex',
       direction,
@@ -1297,7 +1297,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       alignItems,
       size,
       children,
-      isdwStyle: containerStyle,
+      idmlStyle: containerStyle,
       ...(item.className ? { className: item.className } : {}),
     };
   }
@@ -1339,14 +1339,14 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     hugCell.height = 'fit-content';
     if (typeof item.height === 'number') hugCell.maxHeight = `${item.height}%`;
   }
-  const cellIsdw = outOfFlow
+  const cellIdml = outOfFlow
     ? { ...(cellStyle ?? {}), ...hugCell }
     : Object.keys(hugCell).length
       ? hugCell
       : undefined;
   return {
     type: 'flex', direction: 'column', ...colAnchor, size, children, componentId: id,
-    ...(cellIsdw ? { isdwStyle: cellIsdw } : {}),
+    ...(cellIdml ? { idmlStyle: cellIdml } : {}),
   };
 }
 
@@ -1382,7 +1382,7 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   // actually shrinks to content (overriding the renderer's default fill).
   const hug = item.hug ? hugStyles(item.hug) : {};
   const merged = { ...anchorStyle, ...item.style, ...hug };
-  const isdwStyle = Object.keys(merged).length ? merged : undefined;
+  const idmlStyle = Object.keys(merged).length ? merged : undefined;
 
   // Classify call args. `@x` -> reactive value binding; a bare identifier -> a
   // handler (onClick); a "/..." string -> a route href; everything else (strings,
@@ -1390,7 +1390,7 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   const valueRefs: string[] = [];
   const modelRefs: string[] = [];
   const handlerRefs: string[] = [];
-  const literals: IsdwArg[] = [];
+  const literals: IdmlArg[] = [];
   for (const a of item.args) {
     if (typeof a === 'string' && a.startsWith(VALUE_REF_PREFIX)) valueRefs.push(a.slice(VALUE_REF_PREFIX.length));
     else if (typeof a === 'string' && a.startsWith(MODEL_REF_PREFIX)) modelRefs.push(a.slice(MODEL_REF_PREFIX.length));
@@ -1418,14 +1418,14 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
 
   switch (item.name) {
     case 'Text':
-      return withBindings({ id, type: 'Text', props: { text: String(first ?? '') }, isdwStyle });
+      return withBindings({ id, type: 'Text', props: { text: String(first ?? '') }, idmlStyle });
 
     case 'Heading':
       return withBindings({
         id,
         type: 'Heading',
         props: { text: String(first ?? ''), level: typeof second === 'number' ? second : 1 },
-        isdwStyle,
+        idmlStyle,
       });
 
     case 'Button': {
@@ -1435,14 +1435,14 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
       const label = literals.find(a => typeof a === 'string' && !a.startsWith('/'));
       const props: Record<string, unknown> = { text: String(label ?? '') };
       if (route) props.href = route;
-      return withBindings({ id, type: 'Button', props, isdwStyle });
+      return withBindings({ id, type: 'Button', props, idmlStyle });
     }
 
     case 'Image':
-      return withBindings({ id, type: 'Image', props: { src: String(first ?? ''), alt: String(second ?? '') }, isdwStyle });
+      return withBindings({ id, type: 'Image', props: { src: String(first ?? ''), alt: String(second ?? '') }, idmlStyle });
 
     case 'Label':
-      return withBindings({ id, type: 'Label', props: { text: String(first ?? '') }, isdwStyle });
+      return withBindings({ id, type: 'Label', props: { text: String(first ?? '') }, idmlStyle });
 
     case 'Icon': {
       // `Icon("House")` → name only; `Icon("House", 24)` → name + size;
@@ -1455,7 +1455,7 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
         if (typeof rest === 'number') props.size = rest;
         else if (typeof rest === 'string') props.color = rest;
       }
-      return withBindings({ id, type: 'Icon', props, isdwStyle });
+      return withBindings({ id, type: 'Icon', props, idmlStyle });
     }
 
     case 'Option': {
@@ -1463,18 +1463,18 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
       // → value "admin", label "Administrator".
       const value = first ?? '';
       const label = second ?? first ?? '';
-      return withBindings({ id, type: 'Option', props: { value, label }, isdwStyle });
+      return withBindings({ id, type: 'Option', props: { value, label }, idmlStyle });
     }
 
     case 'Input':
     case 'Textarea':
       // `Input(~model, "Placeholder text")` — the `~model` binds the value; the
-      // first string literal is the placeholder (its text is content → .isdw).
+      // first string literal is the placeholder (its text is content → .idml).
       return withBindings({
         id,
         type: item.name,
         props: first != null ? { placeholder: String(first) } : {},
-        isdwStyle,
+        idmlStyle,
       });
 
     default:
@@ -1482,7 +1482,7 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
         id,
         type: item.name,
         props: Object.fromEntries(literals.map((v, i) => [`arg${i}`, v])),
-        isdwStyle,
+        idmlStyle,
       });
   }
 }
@@ -1524,15 +1524,15 @@ const DEFAULT_TOKENS: UIConfig['tokens'] = {
 
 export interface ParseOptions {
   /**
-   * Called when an `import "./file.isdw"` line is encountered.
+   * Called when an `import "./file.idml"` line is encountered.
    * Should return the raw source of the imported file.
    */
   resolve?: (path: string) => string;
 }
 
-export function parseIsdw(source: string, options?: ParseOptions): UIConfig {
+export function parseIdml(source: string, options?: ParseOptions): UIConfig {
   _idCounter = 0;
-  const parser = new IsdwParser(tokenize(source));
+  const parser = new IdmlParser(tokenize(source));
   const parsedPages = parser.parseFile(options?.resolve);
 
   // Total-tiling validation: every page (a column root) and every definition
@@ -1562,7 +1562,7 @@ export function parseIsdw(source: string, options?: ParseOptions): UIConfig {
       direction: 'column',
       size: { width: '100%', height: '100%' },
       children: layoutChildren,
-      ...(scroll ? { isdwStyle: { overflowY: 'auto' } } : {}),
+      ...(scroll ? { idmlStyle: { overflowY: 'auto' } } : {}),
     };
     return { route, layout: rootLayout, components };
   });
