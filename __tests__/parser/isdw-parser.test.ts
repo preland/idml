@@ -516,6 +516,28 @@ Text("a")[100,50,top-left]{}
     ).toThrow(/cross-axis/);
   });
 
+  it('treats a definition of only out-of-flow content as out-of-flow', () => {
+    // A chrome widget that is just an Overlay + Modal takes no tiling space, so
+    // it can sit beside a full-height sibling without breaking the sum.
+    expect(() =>
+      parseIsdw(`
+define FeedbackWidget() {
+Overlay()[100,100,top-left] {
+Button("x", openFeedback)[10,10,bottom-right]{}
+}
+Modal(@state.open)[50,50,center] {
+Text("hi")[100,100,top-left]{}
+}
+}
+./home
+Col()[100,100,top-left] {
+Text("body")[100,100,top-left]{}
+}
+FeedbackWidget()[100,100,top-left]{}
+`)
+    ).not.toThrow();
+  });
+
   it('accepts an explicit Spacer that fills the gap', () => {
     expect(() =>
       parseIsdw(`
