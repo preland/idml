@@ -1,4 +1,5 @@
 import type { UIConfig, LayoutDef, ComponentDef, FlexDef, SizeDef, DataBindingDef } from '../types';
+import type { DarkRule } from '../types/config.types';
 import type { PercentageString, DynamicSize, DynamicDim } from '../types/layout.types';
 
 // ==================== PARSED INTERMEDIATE TYPES ====================
@@ -25,6 +26,20 @@ interface HugSpec {
   h: boolean;
 }
 
+/**
+ * Fill flags — the opposite of hug. A filled axis makes the element STRETCH to
+ * its flex line's cross size (i.e. the tallest/widest sibling) instead of
+ * sizing to its own `[h,w]` tile, via `align-self: stretch` + an `auto` size on
+ * that axis. Use it so paired cards in a Row become equal height (the shorter
+ * grows to match the taller) without the tile forcing a fixed height. `fill-h`
+ * stretches height (the cross axis in a Row); `fill-w` stretches width (the
+ * cross axis in a Col).
+ */
+interface FillSpec {
+  w: boolean;
+  h: boolean;
+}
+
 // An argument value in a component call. Bare identifiers become tagged strings
 // (FN_REF_PREFIX = handler, VALUE_REF_PREFIX = reactive value binding); `null`,
 // booleans, numbers and strings are literals; a `{ }` block is a children marker.
@@ -47,6 +62,14 @@ interface ParsedItem {
   /** Optional content-sizing flags from a trailing `hug` / `hug-w` / `hug-h`
    *  token in the dimension bracket. */
   hug?: HugSpec;
+  /** Optional stretch-to-fill flags from a trailing `fill` / `fill-w` /
+   *  `fill-h` token — the inverse of hug (align-self: stretch). */
+  fill?: FillSpec;
+  /** Optional `grow` token — the element FLEX-GROWS to fill the remaining
+   *  MAIN-axis space of its parent (flex: 1 1 0), so a section fills the
+   *  leftover height in a Col / width in a Row while its siblings keep their
+   *  content size. Its declared main-axis % is ignored (flex controls it). */
+  grow?: boolean;
   /** Optional visibility condition from a `?@ref` / `?!@ref` clause after the
    *  dims — the element renders only when the ref is truthy (negate flips it). */
   visibility?: VisibilityRef;
@@ -270,6 +293,79 @@ function tokenize(source: string): Token[] {
   return tokens;
 }
 
+// ==================== CLASS-BLOCK GUARD ====================
+
+// Tailwind utility classes that control an element's SIZING or LAYOUT in any
+// way. These are forbidden inside idml class blocks: idml owns geometry — size
+// comes from the `[h,w]` dims + hug/fill/grow, and spacing/flow from style-block
+// props (pad, gap, align, overflow, or any raw CSS prop like flexShrink). A
+// class block may carry ONLY visual styling (colour, border, radius, shadow,
+// font weight/family/style, opacity, transform, transition, hover/focus states).
+// Each entry is matched against the *base* class (after stripping `!`, any
+// `variant:` prefixes, and a leading `-`). See assertNoLayoutClasses.
+const LAYOUT_CLASS_PATTERNS: RegExp[] = [
+  // Spacing: padding / margin / gap / space-between
+  /^(p|m)[trblxyse]?-/,
+  /^gap(-[xy])?-/,
+  /^space-[xy]-/,
+  /^scroll-(p|m)[trblxyse]?-/,
+  // Sizing: width / height / min / max / size / flex-basis / aspect / columns
+  /^(w|h|size|min-w|max-w|min-h|max-h|min|max)-/,
+  /^basis-/,
+  /^aspect-/,
+  /^columns-/,
+  // Flexbox / grid layout
+  /^flex(-|$)/,
+  /^(grow|shrink)(-|$)/,
+  /^order-/,
+  /^(justify|items|self|content|place)-/,
+  /^grid(-|$)/,
+  /^(col|row)-/,
+  /^(auto-cols|auto-rows|grid-cols|grid-rows|grid-flow)-/,
+  // Display
+  /^(block|inline-block|inline-flex|inline-grid|inline|flow-root|contents|hidden|inline-table|table|table-.+|list-item)$/,
+  // Position
+  /^(static|fixed|absolute|relative|sticky)$/,
+  /^(inset|top|right|bottom|left|start|end)-/,
+  /^inset$/,
+  /^z-/,
+  // Overflow
+  /^overflow(-|$)/,
+  /^overscroll(-|$)/,
+  // Float / clear
+  /^(float|clear)-/,
+  // Text alignment (idml: `align`) + font size (idml: `size`) + line-height
+  /^text-(left|center|right|justify|start|end)$/,
+  /^text-(xs|sm|base|lg|xl|[0-9]+xl)$/,
+  /^leading-/,
+  /^truncate$/,
+  /^box-(border|content)$/,
+];
+
+// Throw if a class string contains any layout/sizing Tailwind utility. `where`
+// names the offending element for the error. `@method` tokens are skipped (they
+// resolve to dynamic classes at render time and can't be checked statically).
+function assertNoLayoutClasses(classStr: string, where: string): void {
+  for (const raw of classStr.split(/\s+/).filter(Boolean)) {
+    if (raw.startsWith('@')) continue;
+    // Normalise: drop leading `!` (important) and any `variant:` prefixes, then a
+    // leading `-` (negative utilities), before matching the base utility.
+    let base = raw.replace(/^!/, '');
+    const colon = base.lastIndexOf(':');
+    if (colon !== -1) base = base.slice(colon + 1);
+    base = base.replace(/^-/, '');
+    if (LAYOUT_CLASS_PATTERNS.some((re) => re.test(base))) {
+      throw new Error(
+        `[idml] class "${raw}" on ${where} controls sizing/layout, which is not ` +
+          `allowed in a class block — idml owns geometry. Use the [h,w] dims + ` +
+          `hug/fill/grow, or a style-block prop (pad/gap/align/overflow, or a raw ` +
+          `CSS prop like flexShrink), instead. Only visual styling (colour, ` +
+          `border, radius, shadow, font, opacity, transform) may live in a class.`
+      );
+    }
+  }
+}
+
 // ==================== STYLE PROP MAPPER ====================
 
 function applyStyleProp(key: string, val: string, result: Record<string, string>): void {
@@ -307,9 +403,10 @@ const MODEL_REF_PREFIX = '\x00model:';
 // `import` of them needn't be defined in the target file. Kept here (rather than
 // importing from the renderer) to preserve the parser/renderer separation.
 const BUILTIN_NAMES = new Set([
-  'Text', 'Heading', 'Button', 'Image', 'List', 'Card', 'Divider', 'Spacer',
+  'Text', 'Heading', 'Button', 'Link', 'Image', 'List', 'Card', 'Divider', 'Spacer',
   'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form', 'Modal', 'Column',
   'Overlay', 'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
+  'Embed',
 ]);
 
 class IdmlParser {
@@ -324,6 +421,9 @@ class IdmlParser {
   // At expansion the call's positional args are bound to these names and any
   // matching references inside the body are substituted. See convertItem.
   defParamRegistry: Map<string, string[]> = new Map();
+  // Dark-mode overrides from `dark { ... }` blocks (shared across imports, so a
+  // block in styles.idml reaches every page that imports it). See parseDarkBlock.
+  darkStyles: DarkRule[] = [];
 
   constructor(tokens: Token[]) {
     this.tokens = tokens;
@@ -365,6 +465,10 @@ class IdmlParser {
         // ordering). Process them into the shared registries and continue.
         if (t?.type === 'IDENT' && t.value === 'import') { this.parseImports(resolve); continue; }
         if (t?.type === 'IDENT' && t.value === 'define') { this.parseDefinition(); continue; }
+        if (t?.type === 'IDENT' && t.value === 'dark' && this.peek(1)?.type === 'LBRACE') {
+          this.parseDarkBlock();
+          continue;
+        }
         if (t?.type === 'IDENT' && this.peek(1)?.type === 'COLON' && this.peek(2)?.type === 'IDENT') {
           this.parseStyleDefs();
           continue;
@@ -434,6 +538,7 @@ class IdmlParser {
     sub.styleRegistry = this.styleRegistry; // share registries
     sub.defRegistry = this.defRegistry;
     sub.defParamRegistry = this.defParamRegistry;
+    sub.darkStyles = this.darkStyles; // dark {} blocks propagate to importers
     sub.parseImports(resolve); // transitive imports
     sub.parseTopDecls();
 
@@ -457,6 +562,10 @@ class IdmlParser {
         this.parseDefinition();
         continue;
       }
+      if (t?.type === 'IDENT' && t.value === 'dark' && this.peek(1)?.type === 'LBRACE') {
+        this.parseDarkBlock();
+        continue;
+      }
       if (
         t?.type === 'IDENT' &&
         this.peek(1)?.type === 'COLON' &&
@@ -467,6 +576,26 @@ class IdmlParser {
       }
       break;
     }
+  }
+
+  // Parse a `dark { key { cssProp: val ... } ... }` block: the DSL-native
+  // dark-mode overrides (replaces a hand-written CSS file). Each entry keys a
+  // selector — `root` (the `.idml-root` itself), `controls` (form inputs), or a
+  // bare Tailwind utility name like `bg-white`/`text-gray-900` → `.bg-white` —
+  // and its `{ }` body reuses the style-def body grammar (bg/fg/borderColor…).
+  // The renderer scopes each rule under `.dark .idml-root`. Blocks accumulate
+  // (shared across imports) so styles.idml can define them once for every page.
+  private parseDarkBlock(): void {
+    this.pos++; // consume 'dark'
+    this.consume('LBRACE');
+    const SPECIAL: Record<string, string> = { root: '', controls: 'input, select, textarea' };
+    while (this.peek()?.type !== 'RBRACE') {
+      const key = this.consume('IDENT').value as string;
+      const style = this.parseStyleDefBody();
+      const selector = key in SPECIAL ? SPECIAL[key] : `.${key}`;
+      this.darkStyles.push({ selector, style });
+    }
+    this.consume('RBRACE');
   }
 
   // Consume `define Name(params?) { ...items including Children()... }`.
@@ -521,6 +650,7 @@ class IdmlParser {
       let className: string | undefined;
       while (this.peek()?.type === 'CLASS_BLOCK') {
         const cls = this.consume('CLASS_BLOCK').value as string;
+        assertNoLayoutClasses(cls, `variant ${name}`);
         className = className ? `${className} ${cls}` : cls;
       }
 
@@ -611,19 +741,26 @@ class IdmlParser {
     const width = this.parseDimension();
     this.consume('COMMA');
     const anchor = this.consume('IDENT').value as string;
-    // Optional trailing sizing keyword: [h, w, anchor, hug|hug-w|hug-h]. It makes
-    // the bound component hug its content within the declared tile (see HugSpec).
+    // Optional trailing sizing keyword: [h, w, anchor, hug|hug-w|hug-h] to hug
+    // content, or [.., fill|fill-w|fill-h] to STRETCH to the flex line's cross
+    // size (align-self: stretch) — the inverse of hug (see HugSpec / FillSpec).
     let hug: HugSpec | undefined;
+    let fill: FillSpec | undefined;
+    let grow: boolean | undefined;
     if (this.peek()?.type === 'COMMA') {
       this.consume('COMMA');
       const kw = this.consume('IDENT').value as string;
       if (kw === 'hug') hug = { w: true, h: true };
       else if (kw === 'hug-w') hug = { w: true, h: false };
       else if (kw === 'hug-h') hug = { w: false, h: true };
+      else if (kw === 'fill') fill = { w: true, h: true };
+      else if (kw === 'fill-w') fill = { w: true, h: false };
+      else if (kw === 'fill-h') fill = { w: false, h: true };
+      else if (kw === 'grow') grow = true;
       else
         throw new Error(
           `[idml] unknown sizing keyword "${kw}" for "${rawName}"; ` +
-            `expected hug, hug-w, or hug-h`
+            `expected hug, hug-w, hug-h, fill, fill-w, fill-h, or grow`
         );
     }
     this.consume('RBRACKET');
@@ -656,6 +793,7 @@ class IdmlParser {
         let negate = false;
         if (this.peek()?.type === 'BANG') { this.consume('BANG'); negate = true; }
         const ref = this.consume('VALUE_REF').value as string;
+        assertNoLayoutClasses(cls, 'a conditional class block');
         condClasses.push({ classes: cls, ref, negate });
         continue;
       }
@@ -693,7 +831,7 @@ class IdmlParser {
     }
     this.consume('RBRACE');
 
-    return { name, args, height, width, anchor, children, style, className, classRefs, condClasses, hug, visibility };
+    return { name, args, height, width, anchor, children, style, className, classRefs, condClasses, hug, fill, grow, visibility };
   }
 
   private parseDimension(): DimValue {
@@ -720,14 +858,19 @@ class IdmlParser {
     return this.consume('NUMBER').value as number;
   }
 
-  /** A literal dimension value inside a `@ref ? A : B`: a number (→ `%`) or a
-   *  number with a unit (`3.4vw`, `64px`). Returns the final CSS string. */
+  /** A literal dimension value inside a `@ref ? A : B`: a bare number → `%`.
+   *  Dimensions are percentages of the parent — units (esp. `vw`) are rejected:
+   *  vw is only for text sizing, never for placement or container sizing. */
   private parseDimLiteral(): string {
     const n = this.consume('NUMBER').value as number;
     const next = this.peek();
     if (next?.type === 'IDENT' && ['vw', 'vh', 'px', 'rem', 'em'].includes(next.value as string)) {
-      this.pos++;
-      return `${n}${next.value}`;
+      throw new Error(
+        `[idml] dimensions are percentages of the parent — the unit ` +
+          `'${next.value}' is not allowed in a [height,width] field (write ` +
+          `'${n}' for ${n}%). vw is only for text sizing, never for placement ` +
+          `or container sizing.`
+      );
     }
     return `${n}%`;
   }
@@ -932,7 +1075,8 @@ function validateTiling(
   direction: 'row' | 'column',
   where: string,
   isOutOfFlow: (name: string) => boolean,
-  containerHug?: HugSpec
+  containerHug?: HugSpec,
+  containerFill?: FillSpec
 ): void {
   // Out-of-flow children (Overlay/Modal/out-of-flow defs) are positioned, not tiled.
   children = children.filter((c) => !isOutOfFlow(c.name));
@@ -952,7 +1096,8 @@ function validateTiling(
   // author guarantees the runtime values tile (e.g. sidebar + content widths).
   const packsMain =
     !!containerHug?.[mainKey] ||
-    children.some((c) => c.hug?.[mainKey] || isDimRef(c[main]));
+    !!containerFill?.[mainKey] ||
+    children.some((c) => c.hug?.[mainKey] || c.grow || isDimRef(c[main]));
   let sum = 0;
   for (const c of children) {
     if (typeof c[main] === 'number') sum += c[main] as number;
@@ -980,8 +1125,100 @@ function walkTiling(
   isOutOfFlow: (name: string) => boolean
 ): void {
   const dir = containerDirection(item.name, defs);
-  if (dir) validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.hug);
+  if (dir) validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.hug, item.fill);
   for (const child of item.children) walkTiling(child, defs, isOutOfFlow);
+}
+
+// ==================== MODULARITY VALIDATION ====================
+
+// Structural caps that keep authored trees shallow and narrow, forcing deep or
+// wide UI to be broken into `define`s. Counted independently per page body and
+// per define body (a define resets the budget); a define CALL is a leaf in the
+// caller, but content passed to it as slot children still nests under the call.
+const MAX_CHILDREN = 3;
+const MAX_DEPTH = 4;
+
+// Opaque leaves: their children are declarative config (a macro), not
+// hand-authored layout, so each counts as a single child and its internals add
+// no depth. `Table` (its `Column` list) and `Select` (its `Option` list) both
+// qualify. (The registered widgets — Map/Timeline/etc. — are already used
+// childless, so they're leaves without special-casing.)
+const STRUCTURE_LEAF = new Set(['Table', 'Select']);
+
+/**
+ * Enforce the two modularity caps on one authored body (a page's items or a
+ * definition's body): every container holds at most MAX_CHILDREN *flow* children
+ * (out-of-flow Modal/Overlay layers don't count), and no item nests deeper than
+ * MAX_DEPTH levels (top-level items are depth 1). Recursion stops at leaves
+ * (Table) and does NOT expand definition calls — a call's slot children continue
+ * the caller's depth, but a definition's own body is validated on its own.
+ */
+function validateModularity(
+  items: ParsedItem[],
+  where: string,
+  isOutOfFlow: (name: string) => boolean,
+  depth: number
+): void {
+  if (depth > MAX_DEPTH) {
+    throw new Error(
+      `[idml] ${where}: nesting exceeds the max depth of ${MAX_DEPTH} ` +
+        `(items here are ${depth} levels deep). Extract a define to flatten it.`
+    );
+  }
+  const flow = items.filter((i) => !isOutOfFlow(i.name));
+  if (flow.length > MAX_CHILDREN) {
+    throw new Error(
+      `[idml] ${where}: ${flow.length} children exceeds the max of ` +
+        `${MAX_CHILDREN} per container. Group some into a sub-container or ` +
+        `extract a define.`
+    );
+  }
+  for (const item of items) {
+    if (STRUCTURE_LEAF.has(item.name)) continue; // leaf widget — don't recurse
+    if (item.children.length > 0) {
+      validateModularity(item.children, `${item.name} in ${where}`, isOutOfFlow, depth + 1);
+    }
+  }
+}
+
+/**
+ * Enforce the "no extraneous HTML" rule: a react-only registered widget (any
+ * component name that is neither an idml builtin nor an authored `define`) must
+ * be sandboxed inside an `Embed` so idml — not the widget's own markup — owns
+ * its bounds. `Embed` itself must carry definite dims (no `hug`) so the sandbox
+ * has a fixed box to clip into. `known` is the set of builtin + define names;
+ * styled-variant names never reach here (parseItem already rewrote them to their
+ * base type). `underEmbed` tracks whether an Embed ancestor is in scope.
+ */
+function validateWidgetEnclosure(
+  items: ParsedItem[],
+  where: string,
+  known: Set<string>,
+  underEmbed: boolean
+): void {
+  for (const item of items) {
+    const isEmbed = item.name === 'Embed';
+    if (isEmbed && item.hug && (item.hug.w || item.hug.h)) {
+      throw new Error(
+        `[idml] Embed in ${where} cannot use hug — a sandbox needs definite ` +
+          `[h,w] dims to bound its widget. Give it explicit height/width %.`
+      );
+    }
+    if (!isEmbed && !known.has(item.name) && !underEmbed) {
+      throw new Error(
+        `[idml] "${item.name}" in ${where} is a React widget, not an idml ` +
+          `builtin or define. Extraneous HTML/React can drive visual changes ` +
+          `idml doesn't define, so it must be sandboxed: wrap it in ` +
+          `Embed()[h,w,anchor] { ${item.name}(...) } so idml owns its bounds.`
+      );
+    }
+    validateWidgetEnclosure(
+      item.children ?? [],
+      isEmbed ? `Embed in ${where}` : where,
+      known,
+      underEmbed || isEmbed
+    );
+  }
 }
 
 function sizeOf(item: ParsedItem): SizeDef {
@@ -1034,6 +1271,39 @@ function hugStyles(hug: HugSpec): Record<string, string> {
 }
 
 /**
+ * Inline styles that make an element STRETCH to its flex line's cross size (the
+ * inverse of hug): `align-self: stretch` overrides the container's anchor-derived
+ * `align-items`, and `auto` on the filled axis lets the flex layout stretch the
+ * box to the tallest/widest sibling (a fixed `fit-content`/`100%` would block
+ * the stretch). Spread LAST so they override the renderer's `size` fill.
+ */
+function fillStyles(fill: FillSpec): Record<string, string> {
+  const s: Record<string, string> = { alignSelf: 'stretch' };
+  if (fill.h) s.height = 'auto';
+  if (fill.w) s.width = 'auto';
+  return s;
+}
+
+/**
+ * Make a converted child FLEX-GROW to fill the remaining MAIN-axis space of its
+ * (flex) parent: `flex: 1 1 0` grows it from a 0 basis, and dropping its
+ * main-axis size lets flex own that dimension; `min-*: 0` lets an inner scroll
+ * area shrink below its content. Called by the parent (which knows its
+ * direction), so `grow` means "fill leftover height in a Col / width in a Row".
+ */
+function applyGrow(node: LayoutDef, direction: 'row' | 'column'): void {
+  node.idmlStyle = {
+    ...(node.idmlStyle ?? {}),
+    flexGrow: '1', flexShrink: '1', flexBasis: '0',
+    ...(direction === 'column' ? { minHeight: '0' } : { minWidth: '0' }),
+  };
+  if (node.size) {
+    if (direction === 'column') delete node.size.height;
+    else delete node.size.width;
+  }
+}
+
+/**
  * Cell-level hug styles for a CONTAINER (Row/Col/Form): the cell shrinks to its
  * packed children on the hugged axis, capped at its tile. No overflow/ellipsis
  * (that would clip the children) — truncation is a leaf-text concern only.
@@ -1057,13 +1327,14 @@ const HUG_INVALID_ON = new Set(['Overlay', 'Modal', 'Children']);
 
 /** Throw if `hug` is used where it has nothing to size (a portal/slot/table or
  *  a definition call). Containers (Row/Col/Form) and components are fine. */
-function assertHuggable(item: ParsedItem, isDef: boolean): void {
+function assertHuggable(item: ParsedItem, _isDef: boolean): void {
   if (!item.hug) return;
-  if (HUG_INVALID_ON.has(item.name) || isDef) {
+  if (HUG_INVALID_ON.has(item.name)) {
     throw new Error(
       `[idml] "${item.name}" cannot use hug — nothing to content-size here. ` +
-        `hug applies to components (e.g. Button/Text) and layout containers ` +
-        `(Row/Col/Form), not definitions, slots, tables, or out-of-flow layers.`
+        `hug applies to components (e.g. Button/Text), layout containers ` +
+        `(Row/Col/Form), and definition calls, not slots, tables, or ` +
+        `out-of-flow layers.`
     );
   }
 }
@@ -1180,7 +1451,12 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       direction: 'column',
       ...colAnchor,
       size,
-      children: slot.map(child => convertItem(child, childCtx)),
+      // The slot flows in a column; a `grow` slot child fills its leftover height.
+      children: slot.map(child => {
+        const n = convertItem(child, childCtx);
+        if (child.grow) applyGrow(n, 'column');
+        return n;
+      }),
       idmlStyle,
     };
   }
@@ -1202,13 +1478,35 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       slotChildren: item.children,
       expanding: new Set(ctx.expanding).add(item.name),
     };
+    // `hug` on a def CALL content-sizes the expansion wrapper (a def call can't
+    // otherwise shrink — its [h,w] tile would fill the cell). Only `fit-content`
+    // is applied (NOT the component `maxHeight/maxWidth:100%` cap + ellipsis) so
+    // a section grows to its full content and the parent scrolls if needed —
+    // capping to the tile would clip/spill a taller section. Wins over `size` in
+    // the renderer, so e.g. a hug-h nav row / sidebar section is content-height.
+    // `fill-h/-w` on a def CALL stretches the expansion wrapper to its flex
+    // line's cross size (align-self: stretch + auto), so paired card sections in
+    // a Row become equal height. It's the inverse of hug — mutually exclusive.
+    const defHug: Record<string, string> = {};
+    if (item.hug?.h) defHug.height = 'fit-content';
+    if (item.hug?.w) defHug.width = 'fit-content';
+    if (item.fill) Object.assign(defHug, fillStyles(item.fill));
+    const defStyle = item.hug || item.fill ? { ...(cellStyle ?? {}), ...defHug } : cellStyle;
+    const bodyChildren = body.map(t => convertItem(t, innerCtx));
+    // A hug-h def call content-sizes its wrapper (column main axis), so — like a
+    // hug-h container — its body children must PACK by content: drop their
+    // main-axis height, or two full-height sections (e.g. a nav block + footer)
+    // would each fill the wrapper and overlap instead of stacking.
+    if (item.hug?.h) {
+      for (const ch of bodyChildren) if (ch.size) delete ch.size.height;
+    }
     return {
       type: 'flex',
       direction: 'column',
       ...colAnchor,
       size,
-      children: body.map(t => convertItem(t, innerCtx)),
-      idmlStyle: cellStyle,
+      children: bodyChildren,
+      idmlStyle: defStyle,
     };
   }
 
@@ -1278,18 +1576,28 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     // each child's main-axis size is dropped so it shrinks to content, and the
     // anchor's justify-content packs them, leaving the rest as explicit empty
     // space. (Cross-axis hug, if any, just content-sizes the cell itself.)
+    // A container hugged OR filled on its MAIN axis packs its children by
+    // content (drop each child's main-axis size so it shrinks to content and the
+    // anchor's justify-content packs them). Hug then content-sizes the container
+    // itself; fill instead keeps the container's tile size (so it FILLS the
+    // parent) and stretches it to the flex line (align-self: stretch) — use fill
+    // to make a card fill a stretched wrapper while its fields still pack at top.
     const mainHug = direction === 'column' ? item.hug?.h : item.hug?.w;
-    if (mainHug) {
+    const mainFill = direction === 'column' ? item.fill?.h : item.fill?.w;
+    if (mainHug || mainFill) {
       for (const ch of children) {
         if (!ch.size) continue;
         if (direction === 'column') delete ch.size.height;
         else delete ch.size.width;
       }
     }
+    // A `grow` child flex-grows to fill the leftover main-axis space.
+    item.children.forEach((pc, i) => { if (pc.grow) applyGrow(children[i], direction); });
     const crossHug = direction === 'column' ? item.hug?.w : item.hug?.h;
-    const containerStyle = crossHug
+    let containerStyle = crossHug
       ? { ...(idmlStyle ?? {}), ...hugContainerStyles({ w: direction === 'column', h: direction === 'row' }) }
       : idmlStyle;
+    if (item.fill) containerStyle = { ...(containerStyle ?? {}), alignSelf: 'stretch' };
     return {
       type: 'flex',
       direction,
@@ -1401,10 +1709,23 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   // The prop a leading `@value` / `~model` binds to, per component. Bound props are
   // applied after literal props in the renderer, so they win when both are present.
   const primaryProp = PRIMARY_PROP[item.name] ?? 'value';
+  // A Select's selected value is the two-way `~model`; a `@value` ref on a Select
+  // instead binds its `options` (a method returning `[{value,label}]`), so option
+  // lists can be data-driven — `Select(~model, @optionsMethod){}`. The Select
+  // builtin already renders an `options` array, so this needs no renderer change.
+  const valueProp = item.name === 'Select' ? 'options' : primaryProp;
+  // A bare-ident handler on a form control fires on CHANGE (not click); the
+  // renderer composes it with the `~model` write so both run. Lets a select do
+  // `Select(~model, @optionsMethod, onPick)` — onPick(values,{event}) sees the
+  // new value via `event.target.value`. A single-line `Input` instead fires the
+  // handler on ENTER (submit-on-enter, e.g. a chat box), via the builtin's
+  // onEnter→keydown wiring. Everything else gets `onClick`.
+  const CHANGE_INPUTS = new Set(['Textarea', 'Select', 'Checkbox', 'Radio']);
+  const handlerProp = item.name === 'Input' ? 'onEnter' : CHANGE_INPUTS.has(item.name) ? 'onChange' : 'onClick';
   const bindings: DataBindingDef[] = [
-    ...valueRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'value' as const })),
+    ...valueRefs.map(methodId => ({ prop: valueProp, methodId, kind: 'value' as const })),
     ...modelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const })),
-    ...handlerRefs.map(methodId => ({ prop: 'onClick', methodId })),
+    ...handlerRefs.map(methodId => ({ prop: handlerProp, methodId })),
     // Dynamic classes (`@method` tokens in a class block) resolve to strings that
     // are appended to className per render.
     ...(item.classRefs ?? []).map(methodId => ({ prop: 'className', methodId, kind: 'value' as const })),
@@ -1435,6 +1756,17 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
       const label = literals.find(a => typeof a === 'string' && !a.startsWith('/'));
       const props: Record<string, unknown> = { text: String(label ?? '') };
       if (route) props.href = route;
+      return withBindings({ id, type: 'Button', props, idmlStyle });
+    }
+
+    // A navigable link: arg0 is the href — a literal OR a `@value` ref (so a
+    // data-driven list can `Link(@item.route)`, which a plain Button can't do
+    // since its route must be a literal). Renders as a Button with `href` set
+    // (the Button builtin renders next/link when href is present); the label /
+    // icon are children. PRIMARY_PROP.Link = 'href' routes the value ref.
+    case 'Link': {
+      const props: Record<string, unknown> = {};
+      if (typeof first === 'string') props.href = first;
       return withBindings({ id, type: 'Button', props, idmlStyle });
     }
 
@@ -1492,6 +1824,7 @@ const PRIMARY_PROP: Record<string, string> = {
   Text: 'text',
   Heading: 'text',
   Button: 'text',
+  Link: 'href',
   Image: 'src',
   Input: 'value',
   Textarea: 'value',
@@ -1538,13 +1871,20 @@ export function parseIdml(source: string, options?: ParseOptions): UIConfig {
   // Total-tiling validation: every page (a column root) and every definition
   // body (also a column) must tile to 100%, as must every nested Row/Col/Form.
   const isOutOfFlow = makeOutOfFlowPredicate(parser.defRegistry);
+  // A widget is "known" (allowed unsandboxed) if it's an idml builtin or an
+  // authored define; anything else is a react-only component needing an Embed.
+  const knownNames = new Set([...BUILTIN_NAMES, ...parser.defRegistry.keys()]);
   for (const { route, items } of parsedPages) {
     validateTiling(items, 'column', `page ${route}`, isOutOfFlow);
     items.forEach((it) => walkTiling(it, parser.defRegistry, isOutOfFlow));
+    validateModularity(items, `page ${route}`, isOutOfFlow, 1);
+    validateWidgetEnclosure(items, `page ${route}`, knownNames, false);
   }
   for (const [name, body] of parser.defRegistry) {
     validateTiling(body, 'column', `define ${name}`, isOutOfFlow);
     body.forEach((it) => walkTiling(it, parser.defRegistry, isOutOfFlow));
+    validateModularity(body, `define ${name}`, isOutOfFlow, 1);
+    validateWidgetEnclosure(body, `define ${name}`, knownNames, false);
   }
 
   const pages = parsedPages.map(({ route, scroll, items }) => {
@@ -1567,5 +1907,7 @@ export function parseIdml(source: string, options?: ParseOptions): UIConfig {
     return { route, layout: rootLayout, components };
   });
 
-  return { version: '1', tokens: DEFAULT_TOKENS, pages };
+  const config: UIConfig = { version: '1', tokens: DEFAULT_TOKENS, pages };
+  if (parser.darkStyles.length > 0) config.darkStyles = parser.darkStyles;
+  return config;
 }

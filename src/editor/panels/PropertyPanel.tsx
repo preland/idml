@@ -118,7 +118,10 @@ export function PropertyPanel({
                 checked={component.visibility.negate ?? false}
                 onChange={(e) =>
                   updateComponent({
-                    visibility: { ...component.visibility, negate: e.target.checked },
+                    visibility: {
+                      methodId: component.visibility?.methodId ?? '',
+                      negate: e.target.checked,
+                    },
                   })
                 }
               />

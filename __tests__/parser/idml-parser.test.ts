@@ -179,48 +179,48 @@ Icon(@darkIcon)[100,100,top-left]{}
 describe('idml parser — styled variants are the only home for classes', () => {
   it('bakes a class block into a Name:BaseType variant and applies it on use', () => {
     const config = parseIdml(`
-SidebarLink:Button \`text-left py-2 px-2 rounded hover:bg-gray-800\`
+SidebarLink:Button \`rounded hover:bg-gray-800 text-white\`
 ./home
 SidebarLink("Logout", logout)[100,100,top-left]{}
 `);
     const btn = findComponent(config.pages[0].components, 'Button')!;
     expect(btn.props?.text).toBe('Logout');
-    expect(btn.className).toBe('text-left py-2 px-2 rounded hover:bg-gray-800');
+    expect(btn.className).toBe('rounded hover:bg-gray-800 text-white');
     expect(btn.bindings).toEqual([{ prop: 'onClick', methodId: 'logout' }]);
   });
 
   it('applies a variant on a Row layout node', () => {
     const config = parseIdml(`
-Bar:Row \`flex items-center gap-4\`
+Bar:Row \`bg-gray-100 border-b\`
 ./home
 Bar()[100,100,top-left] {
 Text("hi")[100,100,top-left]{}
 }
 `);
     const row = config.pages[0].layout.children[0];
-    expect(row.className).toBe('flex items-center gap-4');
+    expect(row.className).toBe('bg-gray-100 border-b');
   });
 
   it('supports a variant with default args and no css body', () => {
     const config = parseIdml(`
-Brand:Text("Project 2031") \`text-xl font-bold\`
+Brand:Text("Project 2031") \`text-gray-900 font-bold\`
 ./home
 Brand()[100,100,top-left]{}
 `);
     const text = findComponent(config.pages[0].components, 'Text')!;
     expect(text.props?.text).toBe('Project 2031');
-    expect(text.className).toBe('text-xl font-bold');
+    expect(text.className).toBe('text-gray-900 font-bold');
   });
 
   it('allows a use-site class block of ONLY dynamic @ bindings (no literals)', () => {
     const config = parseIdml(`
-RoleBadge:Text \`inline-flex px-2 rounded-full\`
+RoleBadge:Text \`rounded-full font-semibold text-blue-800\`
 ./home
 RoleBadge(@item.role)[100,100,top-left]\`@roleClass\`{}
 `);
     const badge = findComponent(config.pages[0].components, 'Text')!;
     // Static classes come from the variant; the dynamic class is a binding.
-    expect(badge.className).toBe('inline-flex px-2 rounded-full');
+    expect(badge.className).toBe('rounded-full font-semibold text-blue-800');
     expect(badge.bindings).toContainEqual({ prop: 'className', methodId: 'roleClass', kind: 'value' });
   });
 });
@@ -228,7 +228,7 @@ RoleBadge(@item.role)[100,100,top-left]\`@roleClass\`{}
 describe('idml parser — definition parameters', () => {
   it('substitutes a positional param into the body', () => {
     const config = parseIdml(`
-Title:Text \`text-2xl\`
+Title:Text \`font-bold text-gray-900\`
 define TopBar(title) {
 Title(title)[100,100,top-left]{}
 }
@@ -237,7 +237,7 @@ TopBar("User Management")[100,100,top-left]{}
 `);
     const text = findComponent(config.pages[0].components, 'Text')!;
     expect(text.props?.text).toBe('User Management');
-    expect(text.className).toBe('text-2xl');
+    expect(text.className).toBe('font-bold text-gray-900');
   });
 
   it('threads a param through a nested definition call', () => {
@@ -488,7 +488,7 @@ Text("hi")[100,100,top-left]{}
   });
 
   it('rejects a literal class at a use site', () => {
-    expect(() => parseIdml(`\n./home\nText("hi")[100,100,top-left]\`text-sm\`{}\n`)).toThrow(
+    expect(() => parseIdml(`\n./home\nText("hi")[100,100,top-left]\`bg-red-500\`{}\n`)).toThrow(
       /literal class/
     );
   });
@@ -549,5 +549,54 @@ Text("b")[40,100,top-left]{}
 }
 `)
     ).not.toThrow();
+  });
+});
+
+describe('idml parser — dynamic Select options', () => {
+  it('binds a Select @ref to options (data-driven) while ~model binds value', () => {
+    const config = parseIdml(`
+./home
+Select(~picked, @userOptions)[100,100,top-left]{}
+`);
+    const select = findComponent(config.pages[0].components, 'Select');
+    expect(select).toBeDefined();
+    const bindings = select!.bindings ?? [];
+    expect(bindings).toContainEqual({ prop: 'options', methodId: 'userOptions', kind: 'value' });
+    expect(bindings).toContainEqual({ prop: 'value', methodId: 'picked', kind: 'model' });
+  });
+
+  it('still lifts static Option children into options for a plain Select', () => {
+    const config = parseIdml(`
+./home
+Select(~role)[100,100,top-left]{
+Option("Admin")[100,100,top-left]{}
+Option("user", "User")[100,100,top-left]{}
+}
+`);
+    const select = findComponent(config.pages[0].components, 'Select');
+    expect(select!.props?.options).toEqual([
+      { value: 'Admin', label: 'Admin' },
+      { value: 'user', label: 'User' },
+    ]);
+  });
+
+  it('binds a bare-ident handler on a Select to onChange (form controls change)', () => {
+    const config = parseIdml(`
+./home
+Select(~picked, @opts, onPick)[100,100,top-left]{}
+`);
+    const select = findComponent(config.pages[0].components, 'Select');
+    const bindings = select!.bindings ?? [];
+    expect(bindings).toContainEqual({ prop: 'onChange', methodId: 'onPick' });
+    expect(bindings).toContainEqual({ prop: 'value', methodId: 'picked', kind: 'model' });
+  });
+
+  it('keeps a Button handler on onClick (not onChange)', () => {
+    const config = parseIdml(`
+./home
+Button("Go", doIt)[100,100,top-left]{}
+`);
+    const btn = findComponent(config.pages[0].components, 'Button');
+    expect(btn!.bindings ?? []).toContainEqual({ prop: 'onClick', methodId: 'doIt' });
   });
 });

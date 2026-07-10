@@ -38,7 +38,7 @@ export function ComponentRenderer({
 
   // Block-like components fill their cell; text/heading stay natural height so
   // the parent flex container can centre them vertically.
-  const FILL_HEIGHT = new Set(['Button', 'Image', 'Card', 'Divider', 'Spacer']);
+  const FILL_HEIGHT = new Set(['Button', 'Image', 'Card', 'Divider', 'Spacer', 'Embed']);
   const tokenStyle = {
     width: '100%',
     ...(FILL_HEIGHT.has(component.type) ? { height: '100%' } : {}),
@@ -121,12 +121,25 @@ function useBoundProps(
       const method = getMethod(binding.methodId);
       if (typeof method === 'function') {
         const fn = method as (...a: unknown[]) => unknown;
-        props[binding.prop] = (event: unknown) =>
+        const wrapped = (event: unknown) =>
           fn(formStore?.values ?? {}, {
             set: (name: string, value: unknown) => formStore?.setValue(name, value),
             event,
             item,
           });
+        // A `~model` binding already set onChange (writes form state). Compose so
+        // BOTH run — the form-state write first, then the author's change handler —
+        // instead of one clobbering the other.
+        const existing = props[binding.prop];
+        if (binding.prop === 'onChange' && typeof existing === 'function') {
+          const prev = existing as (e: unknown) => void;
+          props[binding.prop] = (event: unknown) => {
+            prev(event);
+            wrapped(event);
+          };
+        } else {
+          props[binding.prop] = wrapped;
+        }
       }
     }
   }
