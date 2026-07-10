@@ -16,12 +16,14 @@ type DimValue = number | 'auto' | DimRef;
 const isDimRef = (d: DimValue): d is DimRef => typeof d === 'object' && d !== null && 'ref' in d;
 
 /**
- * Content-sizing ("hug") flags. An element still declares its `[h,w]` percentage
- * tile — that tile is its MAX bound — but a hugged axis shrinks the bound
- * component to its content within the tile (instead of stretching to fill it),
- * clipping with an ellipsis if the content would overflow the tile.
+ * Content-sizing ("fit") flags. An element still declares its `[h,w]` percentage
+ * tile — that tile is its MAX bound and IS COUNTED in the parent's tiling sum, so
+ * the space is fully accounted for — but a fit axis draws the element at its
+ * natural (content) size within that reserved box, clipping with an ellipsis if
+ * the content would overflow the max. (Formerly `hug`; the name `hug` now means
+ * fill-remaining — see ParsedItem.fit.)
  */
-interface HugSpec {
+interface FitSpec {
   w: boolean;
   h: boolean;
 }
@@ -59,17 +61,18 @@ interface ParsedItem {
   classRefs?: string[];
   /** Conditional class blocks (`` `classes`?@ref ``) applied per render. */
   condClasses?: { classes: string; ref: string; negate: boolean }[];
-  /** Optional content-sizing flags from a trailing `hug` / `hug-w` / `hug-h`
-   *  token in the dimension bracket. */
-  hug?: HugSpec;
+  /** Optional content-sizing flags from a trailing `fit` / `fit-w` / `fit-h`
+   *  token — natural size, capped at the declared `%` (which still counts toward
+   *  the parent's tiling sum). */
+  fit?: FitSpec;
   /** Optional stretch-to-fill flags from a trailing `fill` / `fill-w` /
-   *  `fill-h` token — the inverse of hug (align-self: stretch). */
+   *  `fill-h` token — cross-axis stretch (align-self: stretch). */
   fill?: FillSpec;
-  /** Optional `grow` token — the element FLEX-GROWS to fill the remaining
-   *  MAIN-axis space of its parent (flex: 1 1 0), so a section fills the
-   *  leftover height in a Col / width in a Row while its siblings keep their
-   *  content size. Its declared main-axis % is ignored (flex controls it). */
-  grow?: boolean;
+  /** Optional `hug` token — the element fills the REMAINING main-axis space of
+   *  its parent (flex: 1 1 0), splitting it equally with any sibling `hug`s, so
+   *  all space is accounted for. Its declared main-axis % is ignored (flex owns
+   *  it). Formerly named `grow`. */
+  hug?: boolean;
   /** Optional visibility condition from a `?@ref` / `?!@ref` clause after the
    *  dims — the element renders only when the ref is truthy (negate flips it). */
   visibility?: VisibilityRef;
@@ -759,26 +762,29 @@ class IdmlParser {
     const width = this.parseDimension();
     this.consume('COMMA');
     const anchor = this.consume('IDENT').value as string;
-    // Optional trailing sizing keyword: [h, w, anchor, hug|hug-w|hug-h] to hug
-    // content, or [.., fill|fill-w|fill-h] to STRETCH to the flex line's cross
-    // size (align-self: stretch) — the inverse of hug (see HugSpec / FillSpec).
-    let hug: HugSpec | undefined;
+    // Optional trailing sizing keyword:
+    //   fit | fit-w | fit-h    -> natural size, capped at the declared % (which
+    //                             still counts toward the parent's tiling sum)
+    //   fill | fill-w | fill-h -> cross-axis stretch (align-self: stretch)
+    //   hug                    -> fill the remaining MAIN-axis space, split
+    //                             equally with sibling `hug`s (was `grow`)
+    let fit: FitSpec | undefined;
     let fill: FillSpec | undefined;
-    let grow: boolean | undefined;
+    let hug: boolean | undefined;
     if (this.peek()?.type === 'COMMA') {
       this.consume('COMMA');
       const kw = this.consume('IDENT').value as string;
-      if (kw === 'hug') hug = { w: true, h: true };
-      else if (kw === 'hug-w') hug = { w: true, h: false };
-      else if (kw === 'hug-h') hug = { w: false, h: true };
+      if (kw === 'fit') fit = { w: true, h: true };
+      else if (kw === 'fit-w') fit = { w: true, h: false };
+      else if (kw === 'fit-h') fit = { w: false, h: true };
       else if (kw === 'fill') fill = { w: true, h: true };
       else if (kw === 'fill-w') fill = { w: true, h: false };
       else if (kw === 'fill-h') fill = { w: false, h: true };
-      else if (kw === 'grow') grow = true;
+      else if (kw === 'hug') hug = true;
       else
         throw new Error(
           `[idml] unknown sizing keyword "${kw}" for "${rawName}"; ` +
-            `expected hug, hug-w, hug-h, fill, fill-w, fill-h, or grow`
+            `expected fit, fit-w, fit-h, fill, fill-w, fill-h, or hug`
         );
     }
     this.consume('RBRACKET');
@@ -849,7 +855,7 @@ class IdmlParser {
     }
     this.consume('RBRACE');
 
-    return { name, args, height, width, anchor, children, style, className, classRefs, condClasses, hug, fill, grow, visibility };
+    return { name, args, height, width, anchor, children, style, className, classRefs, condClasses, fit, fill, hug, visibility };
   }
 
   private parseDimension(): DimValue {
@@ -1095,8 +1101,8 @@ function validateTiling(
   direction: 'row' | 'column',
   where: string,
   isOutOfFlow: (name: string) => boolean,
-  containerHug?: HugSpec,
-  containerFill?: FillSpec
+  containerFit?: FitSpec,
+  containerGap?: boolean
 ): void {
   // Out-of-flow children (Overlay/Modal/out-of-flow defs) are positioned, not tiled.
   children = children.filter((c) => !isOutOfFlow(c.name));
@@ -1105,35 +1111,68 @@ function validateTiling(
   const cross = direction === 'row' ? 'height' : 'width';
   const mainKey = direction === 'row' ? 'w' : 'h';
   const crossKey = direction === 'row' ? 'h' : 'w';
-  // Content-flow: when the container hugs the main axis, OR any child hugs the
-  // main axis (is content-sized), the children PACK instead of tiling — so the
-  // sum-to-100 rule is lifted (the leftover is explicit empty padding, exactly
-  // as a hug element's unused tile space is). Strict tiling still applies to
-  // every ordinary container.
-  // A `@ref` (reactive) dim is resolved at render time, so its value can't be
-  // summed statically — its presence on the main axis lifts the sum-to-100 rule
-  // (just like hug), and on the cross axis it's exempt from the fill check. The
-  // author guarantees the runtime values tile (e.g. sidebar + content widths).
-  const packsMain =
-    !!containerHug?.[mainKey] ||
-    !!containerFill?.[mainKey] ||
-    children.some((c) => c.hug?.[mainKey] || c.grow || isDimRef(c[main]));
-  let sum = 0;
+
+  // Cross axis: every child fills it (100%), unless it `fill`s (stretch to the
+  // line), `fit`s the cross axis (natural size within its declared max), or the
+  // dim is a runtime `@ref` (author-guaranteed).
   for (const c of children) {
-    if (typeof c[main] === 'number') sum += c[main] as number;
-    // A child that hugs the CROSS axis is content-sized there (≤100), and a
-    // `@ref` cross dim is dynamic — both opt out of the fill-the-cross-axis rule.
-    if (!c.hug?.[crossKey] && !isDimRef(c[cross]) && (c[cross] as number) !== 100) {
+    if (!c.fill?.[crossKey] && !c.fit?.[crossKey] && !isDimRef(c[cross]) && (c[cross] as number) !== 100) {
       throw new Error(
         `[idml] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
           `(got ${c[cross]}); no vacant space is allowed`
       );
     }
   }
-  if (!packsMain && sum !== 100) {
+
+  // A runtime `@ref` main dim can't be summed statically — trust the author to
+  // tile at runtime (e.g. sidebar + content widths that swap on collapse).
+  if (children.some((c) => isDimRef(c[main]))) return;
+
+  // Main axis — the exact-fill invariant. Every child either RESERVES a fixed
+  // main-% (a plain dim, or a `fit` whose % is its capped max — it draws smaller
+  // but the box is still reserved) or is a `hug` that claims the LEFTOVER, split
+  // equally with sibling `hug`s. All declared space must add up to exactly 100%.
+  const hugCount = children.filter((c) => c.hug).length;
+  let reserved = 0;
+  for (const c of children) if (!c.hug) reserved += c[main] as number;
+
+  // Over-claiming the axis is ALWAYS a contradiction — e.g. two [100,100]
+  // children can't each own 100% of the stacking axis.
+  if (reserved > 100) {
     throw new Error(
-      `[idml] children of ${where} must tile to 100% along ${main}; got ${sum}. ` +
-        `Add an explicit Spacer for any gap.`
+      `[idml] children of ${where} over-claim ${main}: the fixed/fit dims ` +
+        `reserve ${reserved}% (> 100%). Their declared ${main}s can't exceed 100%.`
+    );
+  }
+  const leftover = 100 - reserved;
+
+  if (hugCount > 0) {
+    // `hug` fills the remaining space; there must BE remaining space to fill.
+    if (leftover <= 0) {
+      throw new Error(
+        `[idml] ${where}: a \`hug\` child needs remaining space, but the ` +
+          `fixed/fit ${main}s already fill 100%. Drop the hug or free up space.`
+      );
+    }
+    return; // hug(s) absorb the leftover (and any gap) — exact fill guaranteed.
+  }
+
+  // No `hug` filler. A content-sized (`fit`) container has no fixed main size to
+  // fill — its children DEFINE its size — so under-fill and gaps are absorbed
+  // into its content; only the over-claim check above applies.
+  if (containerFit?.[mainKey]) return;
+
+  // A definite-size container must be filled exactly.
+  if (containerGap) {
+    throw new Error(
+      `[idml] ${where}: has a ${main}-axis gap but no \`hug\` child to absorb ` +
+        `it — the children would overflow by the gap. Add a \`hug\` child/Spacer.`
+    );
+  }
+  if (leftover !== 0) {
+    throw new Error(
+      `[idml] children of ${where} must fill ${main} exactly: the dims reserve ` +
+        `${reserved}% (need 100%). Add a \`hug\` child/Spacer, or adjust the %s.`
     );
   }
 }
@@ -1145,7 +1184,13 @@ function walkTiling(
   isOutOfFlow: (name: string) => boolean
 ): void {
   const dir = containerDirection(item.name, defs);
-  if (dir) validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.hug, item.fill);
+  if (dir) {
+    // A gap on the MAIN axis consumes space between children, so it must be
+    // absorbed by a `hug` child. (Variant `{ gap }` is merged into item.style.)
+    const s = item.style ?? {};
+    const mainGap = !!s.gap || !!(dir === 'column' ? s.rowGap : s.columnGap);
+    validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.fit, mainGap);
+  }
   for (const child of item.children) walkTiling(child, defs, isOutOfFlow);
 }
 
@@ -1218,7 +1263,7 @@ function validateWidgetEnclosure(
 ): void {
   for (const item of items) {
     const isEmbed = item.name === 'Embed';
-    if (isEmbed && item.hug && (item.hug.w || item.hug.h)) {
+    if (isEmbed && item.fit && (item.fit.w || item.fit.h)) {
       throw new Error(
         `[idml] Embed in ${where} cannot use hug — a sandbox needs definite ` +
           `[h,w] dims to bound its widget. Give it explicit height/width %.`
@@ -1273,7 +1318,7 @@ function dimRefToDynamic(d: DimRef): DynamicDim {
  * it spill out of the tile. These are spread LAST into the component's style, so
  * they override the renderer's default `width/height:100%` fill.
  */
-function hugStyles(hug: HugSpec): Record<string, string> {
+function fitStyles(hug: FitSpec): Record<string, string> {
   const s: Record<string, string> = {};
   if (hug.w) {
     s.width = 'fit-content';
@@ -1311,7 +1356,7 @@ function fillStyles(fill: FillSpec): Record<string, string> {
  * area shrink below its content. Called by the parent (which knows its
  * direction), so `grow` means "fill leftover height in a Col / width in a Row".
  */
-function applyGrow(node: LayoutDef, direction: 'row' | 'column'): void {
+function applyHug(node: LayoutDef, direction: 'row' | 'column'): void {
   node.idmlStyle = {
     ...(node.idmlStyle ?? {}),
     flexGrow: '1', flexShrink: '1', flexBasis: '0',
@@ -1328,7 +1373,7 @@ function applyGrow(node: LayoutDef, direction: 'row' | 'column'): void {
  * packed children on the hugged axis, capped at its tile. No overflow/ellipsis
  * (that would clip the children) — truncation is a leaf-text concern only.
  */
-function hugContainerStyles(hug: HugSpec): Record<string, string> {
+function fitContainerStyles(hug: FitSpec): Record<string, string> {
   const s: Record<string, string> = {};
   // NB: no inline max-width/height cap. The cell shrinks to its content
   // (fit-content); a hard tile cap would override author `max-w-*` classes
@@ -1343,13 +1388,13 @@ function hugContainerStyles(hug: HugSpec): Record<string, string> {
  *  flow children whose packing `hug` could control. (`Table` IS huggable — it
  *  expands to a Col of content-height rows, so `hug-h` gives a content-height
  *  card with no dead space below the last row; handled in `expandTable`.) */
-const HUG_INVALID_ON = new Set(['Overlay', 'Modal', 'Children']);
+const FIT_INVALID_ON = new Set(['Overlay', 'Modal', 'Children']);
 
 /** Throw if `hug` is used where it has nothing to size (a portal/slot/table or
  *  a definition call). Containers (Row/Col/Form) and components are fine. */
-function assertHuggable(item: ParsedItem, _isDef: boolean): void {
-  if (!item.hug) return;
-  if (HUG_INVALID_ON.has(item.name)) {
+function assertFittable(item: ParsedItem, _isDef: boolean): void {
+  if (!item.fit) return;
+  if (FIT_INVALID_ON.has(item.name)) {
     throw new Error(
       `[idml] "${item.name}" cannot use hug — nothing to content-size here. ` +
         `hug applies to components (e.g. Button/Text), layout containers ` +
@@ -1423,11 +1468,11 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // fixed size, so the Col shrinks to its rows (no dead white space below the
   // last row) instead of stretching to the declared tile height.
   const tableStyle = { ...item.style };
-  if (item.hug?.w) tableStyle.width = 'fit-content';
+  if (item.fit?.w) tableStyle.width = 'fit-content';
   const tableCol = mkItem(
     'Col', [],
-    item.hug?.h ? 'auto' : item.height,
-    item.hug?.w ? 'auto' : item.width,
+    item.fit?.h ? 'auto' : item.height,
+    item.fit?.w ? 'auto' : item.width,
     item.anchor, [headerRow, repeat], tableStyle
   );
   tableCol.className = item.className;
@@ -1450,7 +1495,7 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
 }
 
 function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
-  assertHuggable(item, ctx.defs.has(item.name));
+  assertFittable(item, ctx.defs.has(item.name));
   const size = sizeOf(item);
   const idmlStyle = Object.keys(item.style).length ? item.style : undefined;
   const colAnchor = anchorToFlexProps(item.anchor, 'column');
@@ -1474,7 +1519,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       // The slot flows in a column; a `grow` slot child fills its leftover height.
       children: slot.map(child => {
         const n = convertItem(child, childCtx);
-        if (child.grow) applyGrow(n, 'column');
+        if (child.hug) applyHug(n, 'column');
         return n;
       }),
       idmlStyle,
@@ -1508,16 +1553,16 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     // line's cross size (align-self: stretch + auto), so paired card sections in
     // a Row become equal height. It's the inverse of hug — mutually exclusive.
     const defHug: Record<string, string> = {};
-    if (item.hug?.h) defHug.height = 'fit-content';
-    if (item.hug?.w) defHug.width = 'fit-content';
+    if (item.fit?.h) defHug.height = 'fit-content';
+    if (item.fit?.w) defHug.width = 'fit-content';
     if (item.fill) Object.assign(defHug, fillStyles(item.fill));
-    const defStyle = item.hug || item.fill ? { ...(cellStyle ?? {}), ...defHug } : cellStyle;
+    const defStyle = item.fit || item.fill ? { ...(cellStyle ?? {}), ...defHug } : cellStyle;
     const bodyChildren = body.map(t => convertItem(t, innerCtx));
     // A hug-h def call content-sizes its wrapper (column main axis), so — like a
     // hug-h container — its body children must PACK by content: drop their
     // main-axis height, or two full-height sections (e.g. a nav block + footer)
     // would each fill the wrapper and overlap instead of stacking.
-    if (item.hug?.h) {
+    if (item.fit?.h) {
       for (const ch of bodyChildren) if (ch.size) delete ch.size.height;
     }
     return {
@@ -1542,11 +1587,11 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       // content on the hugged axis — its declared dim becomes the MAX bound
       // (so a docked panel grows from its corner to fit content, no dead space).
       const hugStyle: Record<string, string> = {};
-      if (child.hug?.w) {
+      if (child.fit?.w) {
         hugStyle.width = 'fit-content';
         if (layout.size?.width) hugStyle.maxWidth = layout.size.width;
       }
-      if (child.hug?.h) {
+      if (child.fit?.h) {
         hugStyle.height = 'fit-content';
         if (layout.size?.height) hugStyle.maxHeight = layout.size.height;
       }
@@ -1602,9 +1647,9 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     // itself; fill instead keeps the container's tile size (so it FILLS the
     // parent) and stretches it to the flex line (align-self: stretch) — use fill
     // to make a card fill a stretched wrapper while its fields still pack at top.
-    const mainHug = direction === 'column' ? item.hug?.h : item.hug?.w;
+    const mainFit = direction === 'column' ? item.fit?.h : item.fit?.w;
     const mainFill = direction === 'column' ? item.fill?.h : item.fill?.w;
-    if (mainHug || mainFill) {
+    if (mainFit || mainFill) {
       for (const ch of children) {
         if (!ch.size) continue;
         if (direction === 'column') delete ch.size.height;
@@ -1612,10 +1657,10 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       }
     }
     // A `grow` child flex-grows to fill the leftover main-axis space.
-    item.children.forEach((pc, i) => { if (pc.grow) applyGrow(children[i], direction); });
-    const crossHug = direction === 'column' ? item.hug?.w : item.hug?.h;
-    let containerStyle = crossHug
-      ? { ...(idmlStyle ?? {}), ...hugContainerStyles({ w: direction === 'column', h: direction === 'row' }) }
+    item.children.forEach((pc, i) => { if (pc.hug) applyHug(children[i], direction); });
+    const crossFit = direction === 'column' ? item.fit?.w : item.fit?.h;
+    let containerStyle = crossFit
+      ? { ...(idmlStyle ?? {}), ...fitContainerStyles({ w: direction === 'column', h: direction === 'row' }) }
       : idmlStyle;
     if (item.fill) containerStyle = { ...(containerStyle ?? {}), alignSelf: 'stretch' };
     return {
@@ -1659,11 +1704,11 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // inside a fit-content parent (e.g. the feedback launcher's hover label) and
   // is what makes a hug pill content-sized within a definite-width column.
   const hugCell: Record<string, string> = {};
-  if (item.hug?.w) {
+  if (item.fit?.w) {
     hugCell.width = 'fit-content';
     if (typeof item.width === 'number') hugCell.maxWidth = `${item.width}%`;
   }
-  if (item.hug?.h) {
+  if (item.fit?.h) {
     hugCell.height = 'fit-content';
     if (typeof item.height === 'number') hugCell.maxHeight = `${item.height}%`;
   }
@@ -1706,10 +1751,10 @@ function anchorToComponentStyle(anchor: string, componentType: string): Record<s
 
 function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   const anchorStyle = anchorToComponentStyle(item.anchor, item.name);
-  // hug styles win over anchor defaults and variant styles so the component
+  // fit styles win over anchor defaults and variant styles so the component
   // actually shrinks to content (overriding the renderer's default fill).
-  const hug = item.hug ? hugStyles(item.hug) : {};
-  const merged = { ...anchorStyle, ...item.style, ...hug };
+  const fit = item.fit ? fitStyles(item.fit) : {};
+  const merged = { ...anchorStyle, ...item.style, ...fit };
   const idmlStyle = Object.keys(merged).length ? merged : undefined;
 
   // Classify call args. `@x` -> reactive value binding; a bare identifier -> a
