@@ -85,7 +85,7 @@ export function ComponentRenderer({
 }
 
 function useBoundProps(
-  bindings: { prop: string; methodId: string; kind?: 'handler' | 'value' | 'model' }[]
+  bindings: { prop: string; methodId: string; kind?: 'handler' | 'value' | 'model'; dynamicKey?: boolean }[]
 ): Record<string, unknown> {
   // The current Repeat row and the enclosing form-state scope. Read once,
   // unconditionally, to keep hook order stable.
@@ -106,12 +106,21 @@ function useBoundProps(
       }
     } else if (binding.kind === 'model') {
       // Two-way: read the form-state cell into the prop, and write it back on change.
-      const name = binding.methodId;
+      // For a dynamic-key binding (`~@path`), the form-state key isn't `methodId`
+      // itself but the value that ref resolves to (e.g. `item.key` -> "surname"),
+      // so a Repeat-generated input can bind to `values[item.key]`.
+      const name = binding.dynamicKey
+        ? String(resolveValueRef(binding.methodId, item, formStore?.values) ?? '')
+        : binding.methodId;
       const isChecked = binding.prop === 'checked';
-      const current = formStore?.values[name];
+      const current = name ? formStore?.values[name] : undefined;
       props[binding.prop] = isChecked ? Boolean(current) : (current ?? '');
-      props.onChange = (e: { target?: { value?: unknown; checked?: unknown } }) =>
+      props.onChange = (e: { target?: { value?: unknown; checked?: unknown } }) => {
+        // A dynamic key that resolved to empty has nowhere to write; skip the write
+        // (still a controlled input) rather than polluting the store with a "" key.
+        if (!name) return;
         formStore?.setValue(name, isChecked ? e?.target?.checked : e?.target?.value);
+      };
     } else {
       // Handler: wrap the method so it receives the current form values plus a
       // helpers object: `handler(values, { set, event, item })`. `set(name, value)`
