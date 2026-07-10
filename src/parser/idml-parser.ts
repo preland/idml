@@ -116,6 +116,7 @@ type TokenType =
   | 'BANG'
   | 'VALUE_REF'
   | 'MODEL_REF'
+  | 'MODEL_DYN_REF'
   | 'CLASS_BLOCK';
 
 interface Token {
@@ -217,6 +218,18 @@ function tokenize(source: string): Token[] {
       let j = i + 1;
       while (j < stripped.length && /[\w.-]/.test(stripped[j])) j++;
       tokens.push({ type: 'VALUE_REF', value: stripped.slice(i + 1, j) });
+      i = j;
+      continue;
+    }
+
+    // Dynamic two-way model reference: ~@path — binds an input's value to a
+    // form-state cell whose KEY is resolved at render from the value-ref `path`
+    // (e.g. `~@item.key` inside a Repeat writes `values[item.key]`). Must precede
+    // the static `~name` rule below since both start with `~`.
+    if (stripped[i] === '~' && stripped[i + 1] === '@' && /[a-zA-Z_]/.test(stripped[i + 2] ?? '')) {
+      let j = i + 2;
+      while (j < stripped.length && /[\w.-]/.test(stripped[j])) j++;
+      tokens.push({ type: 'MODEL_DYN_REF', value: stripped.slice(i + 2, j) });
       i = j;
       continue;
     }
@@ -398,6 +411,11 @@ const FN_REF_PREFIX = '\x00fn:';
 const VALUE_REF_PREFIX = '\x00val:';
 // Prefix for `~name` model references — a two-way binding to a form-state cell.
 const MODEL_REF_PREFIX = '\x00model:';
+// Prefix for `~@path` DYNAMIC model references — a two-way binding whose form-state
+// key is resolved at render from a value-ref path (usually the current Repeat row,
+// e.g. `~@item.key`). Lets a data-driven field grid two-way-bind each generated
+// input to `values[item.key]` — impossible with the static `~name` sugar.
+const MODEL_DYN_REF_PREFIX = '\x00modeldyn:';
 
 // Names that resolve to builtins (renderer-provided) or layout primitives, so an
 // `import` of them needn't be defined in the target file. Kept here (rather than
@@ -895,6 +913,8 @@ class IdmlParser {
     if (t.type === 'VALUE_REF') { this.pos++; return `${VALUE_REF_PREFIX}${t.value}`; }
     // ~name — two-way model binding to a form-state cell.
     if (t.type === 'MODEL_REF') { this.pos++; return `${MODEL_REF_PREFIX}${t.value}`; }
+    // ~@path — dynamic two-way model binding (key resolved at render from a ref).
+    if (t.type === 'MODEL_DYN_REF') { this.pos++; return `${MODEL_DYN_REF_PREFIX}${t.value}`; }
     if (t.type === 'IDENT') {
       this.pos++;
       // Literal keywords. `null` is the explicit "no handler / no value" placeholder.
@@ -995,7 +1015,7 @@ function substituteParams(item: ParsedItem, bindings: Map<string, IdmlArg>): Par
   if (bindings.size === 0) return item;
   const subArg = (a: IdmlArg): IdmlArg => {
     if (typeof a === 'string') {
-      for (const prefix of [FN_REF_PREFIX, VALUE_REF_PREFIX, MODEL_REF_PREFIX]) {
+      for (const prefix of [FN_REF_PREFIX, VALUE_REF_PREFIX, MODEL_REF_PREFIX, MODEL_DYN_REF_PREFIX]) {
         if (a.startsWith(prefix)) {
           const name = a.slice(prefix.length);
           return bindings.has(name) ? (bindings.get(name) as IdmlArg) : a;
@@ -1697,10 +1717,14 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   // numbers, booleans, null) is a positional literal.
   const valueRefs: string[] = [];
   const modelRefs: string[] = [];
+  const dynModelRefs: string[] = [];
   const handlerRefs: string[] = [];
   const literals: IdmlArg[] = [];
   for (const a of item.args) {
     if (typeof a === 'string' && a.startsWith(VALUE_REF_PREFIX)) valueRefs.push(a.slice(VALUE_REF_PREFIX.length));
+    // Check the dynamic-model prefix before the plain-model one — both are model
+    // refs but the dynamic one carries a distinct (longer) prefix.
+    else if (typeof a === 'string' && a.startsWith(MODEL_DYN_REF_PREFIX)) dynModelRefs.push(a.slice(MODEL_DYN_REF_PREFIX.length));
     else if (typeof a === 'string' && a.startsWith(MODEL_REF_PREFIX)) modelRefs.push(a.slice(MODEL_REF_PREFIX.length));
     else if (typeof a === 'string' && a.startsWith(FN_REF_PREFIX)) handlerRefs.push(a.slice(FN_REF_PREFIX.length));
     else literals.push(a);
@@ -1725,6 +1749,9 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   const bindings: DataBindingDef[] = [
     ...valueRefs.map(methodId => ({ prop: valueProp, methodId, kind: 'value' as const })),
     ...modelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const })),
+    // `~@path` — same two-way model wiring, but `methodId` is a value-ref path whose
+    // resolved value is the form-state KEY (see useBoundProps' dynamicKey branch).
+    ...dynModelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const, dynamicKey: true })),
     ...handlerRefs.map(methodId => ({ prop: handlerProp, methodId })),
     // Dynamic classes (`@method` tokens in a class block) resolve to strings that
     // are appended to className per render.

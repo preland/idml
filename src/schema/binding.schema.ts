@@ -5,6 +5,7 @@ export const DataBindingDefSchema = z
     prop: z.string().min(1),
     methodId: z.string().min(1),
     kind: z.enum(['handler', 'value', 'model']).optional(),
+    dynamicKey: z.boolean().optional(),
   })
   .strict();
 
