@@ -1102,7 +1102,8 @@ function validateTiling(
   where: string,
   isOutOfFlow: (name: string) => boolean,
   containerFit?: FitSpec,
-  containerGap?: boolean
+  containerGap?: boolean,
+  containerScroll?: boolean
 ): void {
   // Out-of-flow children (Overlay/Modal/out-of-flow defs) are positioned, not tiled.
   children = children.filter((c) => !isOutOfFlow(c.name));
@@ -1132,9 +1133,17 @@ function validateTiling(
   // main-% (a plain dim, or a `fit` whose % is its capped max — it draws smaller
   // but the box is still reserved) or is a `hug` that claims the LEFTOVER, split
   // equally with sibling `hug`s. All declared space must add up to exactly 100%.
-  const hugCount = children.filter((c) => c.hug).length;
+  // A `?@ref` visibility-gated child may or may not render, so it can't be
+  // required to tile, and mutually-exclusive gated siblings (e.g. an Input XOR a
+  // Textarea in one slot) must not double-count — exclude gated children from the
+  // reserved sum. The author owns the runtime fill of a conditional slot.
+  const tiled = children.filter((c) => !c.visibility);
+  // All children conditional → the container is a conditional-content region;
+  // whichever child shows fills it, so there's nothing to require statically.
+  if (tiled.length === 0) return;
+  const hugCount = tiled.filter((c) => c.hug).length;
   let reserved = 0;
-  for (const c of children) if (!c.hug) reserved += c[main] as number;
+  for (const c of tiled) if (!c.hug) reserved += c[main] as number;
 
   // Over-claiming the axis is ALWAYS a contradiction — e.g. two [100,100]
   // children can't each own 100% of the stacking axis.
@@ -1157,10 +1166,11 @@ function validateTiling(
     return; // hug(s) absorb the leftover (and any gap) — exact fill guaranteed.
   }
 
-  // No `hug` filler. A content-sized (`fit`) container has no fixed main size to
-  // fill — its children DEFINE its size — so under-fill and gaps are absorbed
-  // into its content; only the over-claim check above applies.
-  if (containerFit?.[mainKey]) return;
+  // No `hug` filler. A content-flow container — one that `fit`s the main axis
+  // (content-sized) or SCROLLS it (overflow auto/scroll) — has no fixed main
+  // size to fill: its children define/scroll its size, so under-fill and gaps
+  // are absorbed. Only the over-claim check above applies to these.
+  if (containerFit?.[mainKey] || containerScroll) return;
 
   // A definite-size container must be filled exactly.
   if (containerGap) {
@@ -1189,7 +1199,11 @@ function walkTiling(
     // absorbed by a `hug` child. (Variant `{ gap }` is merged into item.style.)
     const s = item.style ?? {};
     const mainGap = !!s.gap || !!(dir === 'column' ? s.rowGap : s.columnGap);
-    validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.fit, mainGap);
+    // A container that scrolls the MAIN axis is content-flow: children stack at
+    // their natural size and it scrolls, so tiling-to-100 isn't required.
+    const ov = (k: string) => s[k] === 'auto' || s[k] === 'scroll';
+    const mainScroll = ov('overflow') || (dir === 'column' ? ov('overflowY') : ov('overflowX'));
+    validateTiling(item.children, dir, `<${item.name}>`, isOutOfFlow, item.fit, mainGap, mainScroll);
   }
   for (const child of item.children) walkTiling(child, defs, isOutOfFlow);
 }
