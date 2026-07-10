@@ -68,8 +68,17 @@ const Icon = ({ name, ...props }: ComponentProps) =>
 const Table = ({ children, ...props }: ComponentProps) =>
   React.createElement('div', { 'data-isd-table': '', ...props }, children ?? 'Table');
 
-const Input = ({ type = 'text', value, onChange, placeholder, name, disabled, style, ...props }: ComponentProps) =>
-  React.createElement('input', { type, value, onChange, placeholder, name, disabled, style, ...props });
+const Input = ({ type = 'text', value, onChange, onEnter, placeholder, name, disabled, style, ...props }: ComponentProps) =>
+  React.createElement('input', {
+    type, value, onChange, placeholder, name, disabled, style,
+    // A DSL handler arg on an Input binds here (onEnter): fire it on Enter so a
+    // single-line field submits (e.g. a chat send box). onEnter is destructured
+    // out so it never leaks to the DOM as an unknown attribute.
+    onKeyDown: onEnter
+      ? (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); (onEnter as (ev: unknown) => void)(e); } }
+      : undefined,
+    ...props,
+  });
 
 const Textarea = ({ value, onChange, placeholder, name, rows, style, ...props }: ComponentProps) =>
   React.createElement('textarea', { value, onChange, placeholder, name, rows, style, ...props });
@@ -167,6 +176,36 @@ const Modal = ({ open, onClose, children, style, ...props }: ComponentProps) => 
   );
 };
 
+// Sandbox enclosure for a react-only registered widget. idml owns the box: the
+// `[h,w]` dims flow into `style` (Embed is fill-height, so it fills its cell),
+// and the widget renders inside an absolutely-positioned inner layer that can
+// NEVER grow the box or paint outside it. Adversarial content — huge intrinsic
+// size, a min-width blowout, absolute/negative-margin escapees — is clipped to
+// the idml bounds (absolute children don't contribute to the parent's size, and
+// `overflow: hidden` clips the paint). A `position: fixed` descendant (e.g. the
+// widget's own full-screen modal) still reaches the viewport by design: an
+// overflow-hidden ancestor that isn't a containing block doesn't clip fixed
+// elements, and we deliberately avoid `contain`/`transform` here so it can't.
+const EMBED_OUTER: React.CSSProperties = {
+  position: 'relative',
+  overflow: 'hidden',
+  minWidth: 0,
+  minHeight: 0,
+};
+const EMBED_INNER: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  overflow: 'auto',
+  minWidth: 0,
+  minHeight: 0,
+};
+const Embed = ({ children, style, ...props }: ComponentProps) =>
+  React.createElement(
+    'div',
+    { 'data-isd-embed': '', style: { ...style, ...EMBED_OUTER }, ...props },
+    React.createElement('div', { 'data-isd-embed-inner': '', style: EMBED_INNER }, children)
+  );
+
 export const BUILTIN_COMPONENTS = {
   Text,
   Heading,
@@ -189,4 +228,5 @@ export const BUILTIN_COMPONENTS = {
   Repeat,
   Form,
   Modal,
+  Embed,
 };

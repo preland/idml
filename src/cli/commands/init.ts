@@ -89,7 +89,7 @@ export async function initCommand(options: { config: string; editor: boolean }) 
           const lines = patched.split('\n');
           const lastNonEmptyLine = lines[lines.length - 2]; // before any trailing newline
           if (lastNonEmptyLine?.trim() === '}') {
-            patched = patched.replace(/^(\s*})(\s*)$/, '$1);$2', 'm');
+            patched = patched.replace(/^(\s*})(\s*)$/m, '$1);$2');
           }
         }
       } else {

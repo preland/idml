@@ -91,7 +91,7 @@ Button("Create User", openCreate)[100,20,top-right,hug]{}
   it('works through a styled variant and definition expansion', () => {
     const config = parseIdml(`
 ./p
-PrimaryButton:Button \`px-4 py-2 bg-blue-600\`
+PrimaryButton:Button \`bg-blue-600 text-white rounded\`
 define Bar() {
 PrimaryButton("Create User", openCreate)[100,100,top-right,hug]{}
 }
@@ -158,11 +158,83 @@ Col()[10,100,top-left]{}
   });
 });
 
+describe('fill — stretch to the flex line (inverse of hug)', () => {
+  it('a fill-h container keeps its size, packs children, and sets align-self', () => {
+    const cfg = parseIdml(`
+./p
+Row()[100,100,top-left] {
+Col()[100,50,top-left,fill-h] {
+Text("a")[100,100,top-left]{}
+Text("b")[100,100,top-left]{}
+}
+Col()[100,50,top-left,fill-h] {
+Text("c")[100,100,top-left]{}
+}
+}
+`);
+    const row = cfg.pages[0].layout.children[0];
+    const card = row.children[0];
+    // Fill keeps the card's own tile size (so it fills the parent) and stretches
+    // it to the flex line; its children lose their main-axis height so they pack.
+    expect(card.size).toEqual({ height: '100%', width: '50%' });
+    expect(card.idmlStyle).toMatchObject({ alignSelf: 'stretch' });
+    for (const child of card.children) {
+      expect(child.size?.height).toBeUndefined();
+    }
+  });
+
+  it('a fill-h def call stretches its wrapper (align-self + auto height)', () => {
+    const layout = parseIdml(`
+define Card() {
+Col()[100,100,top-left]{}
+}
+./p
+Row()[100,100,top-left] {
+Card()[100,50,top-left,fill-h]{}
+Card()[100,50,top-left,fill-h]{}
+}
+`).pages[0].layout;
+    const wrapper = layout.children[0].children[0];
+    expect(wrapper.idmlStyle).toMatchObject({ alignSelf: 'stretch', height: 'auto' });
+  });
+});
+
+describe('grow — flex-grow to fill leftover main-axis space', () => {
+  it('a grow child flex-grows, drops its main size, and relaxes tiling', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[100,100,top-left,hug-h]{}
+Col()[100,100,top-left,grow] {
+Text("body")[100,100,top-left]{}
+}
+}
+`);
+    const outer = cfg.pages[0].layout.children[0];
+    const grown = outer.children[1];
+    expect(grown.idmlStyle).toMatchObject({ flexGrow: '1', flexShrink: '1', flexBasis: '0', minHeight: '0' });
+    // its main-axis (height) size is dropped so flex owns it
+    expect(grown.size?.height).toBeUndefined();
+  });
+
+  it('lets a hug head + grow body coexist without a tile-sum error', () => {
+    expect(() =>
+      parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[100,100,top-left,hug-h]{}
+Spacer()[100,100,top-left,grow]{}
+}
+`)
+    ).not.toThrow();
+  });
+});
+
 describe('hug — invalid placements are rejected', () => {
   const cases: [string, string][] = [
     [
-      'definition',
-      `./p\ndefine D() {\nText("x")[100,100,top-left]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left,hug]{}\n}`,
+      'a Children slot',
+      `./p\ndefine D() {\nChildren()[100,100,top-left,hug]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left]{}\n}`,
     ],
   ];
   for (const [label, src] of cases) {
@@ -170,6 +242,16 @@ describe('hug — invalid placements are rejected', () => {
       expect(() => parseIdml(src)).toThrow(/cannot use hug|hug applies/);
     });
   }
+
+  // hug on a definition CALL is allowed — it content-sizes the expansion wrapper
+  // (a def call can't otherwise shrink), so e.g. a hug-h nav row is content-height.
+  it('hug-h on a definition call content-sizes the expansion wrapper', () => {
+    const layout = parseIdml(
+      `./p\ndefine D() {\nText("x")[100,100,top-left]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left,hug-h]{}\n}`
+    ).pages[0].layout;
+    const wrapper = layout.children[0].children[0];
+    expect(wrapper.idmlStyle?.height).toBe('fit-content');
+  });
 
   // A Table IS huggable — it expands to a Col of content-height rows, so `hug-h`
   // gives a content-height card (no dead space below the last row) by dropping

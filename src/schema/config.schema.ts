@@ -3,11 +3,19 @@ import { TokensDefSchema } from './tokens.schema';
 import { PageDefSchema } from './page.schema';
 import type { UIConfig } from '../types';
 
+const DarkRuleSchema = z
+  .object({
+    selector: z.string(),
+    style: z.record(z.string()),
+  })
+  .strict();
+
 export const UIConfigSchema = z
   .object({
     version: z.literal('1'),
     tokens: TokensDefSchema,
     pages: z.array(PageDefSchema).min(1),
+    darkStyles: z.array(DarkRuleSchema).optional(),
     userComponents: z.array(z.string()).optional(),
   })
   .strict();

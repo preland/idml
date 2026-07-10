@@ -54,15 +54,26 @@ Col()[100,@state.rest,top-left]{}
 });
 
 describe('idml parser — conditional dim & class', () => {
-  it('parses `@ref ? A : B` dim into whenTrue/whenFalse', () => {
+  it('parses `@ref ? A : B` dim into whenTrue/whenFalse (percentages)', () => {
     const config = parseIdml(`
+./home
+Row()[100,100,top-left] {
+Col()[100,@state.collapsed ? 3.4 : 13.5,top-left]{}
+}
+`);
+    const col = config.pages[0].layout.children[0].children[0];
+    expect(col.dynamicSize).toEqual({ width: { ref: 'state.collapsed', whenTrue: '3.4%', whenFalse: '13.5%' } });
+  });
+
+  it('rejects a unit (vw) in a conditional dimension — dims are percentages', () => {
+    expect(() =>
+      parseIdml(`
 ./home
 Row()[100,100,top-left] {
 Col()[100,@state.collapsed ? 3.4vw : 13.5vw,top-left]{}
 }
-`);
-    const col = config.pages[0].layout.children[0].children[0];
-    expect(col.dynamicSize).toEqual({ width: { ref: 'state.collapsed', whenTrue: '3.4vw', whenFalse: '13.5vw' } });
+`)
+    ).toThrow(/vw is only for text sizing/);
   });
 
   it('bare numbers in a conditional dim become percentages', () => {

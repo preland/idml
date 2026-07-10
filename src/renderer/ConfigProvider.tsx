@@ -2,10 +2,33 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { UIConfig } from '../types';
+import type { DarkRule } from '../types/config.types';
 import { validateConfig } from '../schema/config.schema';
 import { injectTokenVars } from './tokens/token-resolver';
 import { registerMethod, clearRegistry } from './registry/method-registry';
 import { registerComponent, clearComponentRegistry } from './registry/component-registry';
+
+/** Compile the DSL `dark { }` rules into a scoped stylesheet. Each rule is
+ *  emitted under `.dark .idml-root` (so it only bites when an ancestor toggles
+ *  the `dark` class and the element is inside an idml page). `!important` beats
+ *  the light Tailwind utilities; selector specificity resolves any overlaps
+ *  (e.g. a `.leaflet-container` reset beats the broad `.idml-root` color). */
+function buildDarkCss(rules?: DarkRule[]): string {
+  if (!rules || rules.length === 0) return '';
+  const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+  return rules
+    .map((r) => {
+      const sel = r.selector
+        .split(',')
+        .map((s) => `.dark .idml-root ${s.trim()}`.trim())
+        .join(', ');
+      const body = Object.entries(r.style)
+        .map(([k, v]) => `${kebab(k)}: ${v} !important`)
+        .join('; ');
+      return `${sel} { ${body} }`;
+    })
+    .join('\n');
+}
 
 export interface ConfigContextValue {
   config: UIConfig;
@@ -105,10 +128,14 @@ export function ConfigProvider({
   if (!validConfig) return null;
 
   const tokenVars = injectTokenVars(validConfig.tokens, darkMode);
+  const darkCss = buildDarkCss(validConfig.darkStyles);
 
   return (
     <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars, debug }}>
-      <div style={tokenVars as React.CSSProperties}>{children}</div>
+      <div style={tokenVars as React.CSSProperties}>
+        {darkCss ? <style dangerouslySetInnerHTML={{ __html: darkCss }} /> : null}
+        {children}
+      </div>
     </ConfigContext.Provider>
   );
 }

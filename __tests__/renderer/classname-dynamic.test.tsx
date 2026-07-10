@@ -9,7 +9,7 @@ describe('dynamic className binding (@method in a class block)', () => {
     // Static classes live in the variant; the use site adds ONLY a dynamic
     // @binding (literal classes at a use site are rejected).
     const config = parseIdml(`
-Badge:Text \`px-2 rounded\`
+Badge:Text \`font-medium rounded\`
 ./home
 Badge("Admin")[100,100,top-left]\`@badgeClass\`{}
 `);
@@ -19,7 +19,7 @@ Badge("Admin")[100,100,top-left]\`@badgeClass\`{}
       </ConfigProvider>
     );
     const el = await screen.findByText('Admin');
-    expect(el).toHaveClass('px-2', 'rounded', 'bg-red-100', 'text-red-800');
+    expect(el).toHaveClass('font-medium', 'rounded', 'bg-red-100', 'text-red-800');
   });
 
   it('resolves a different class per Repeat row from the row item', async () => {
