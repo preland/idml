@@ -1008,6 +1008,13 @@ interface ConvertCtx {
   /** True for out-of-flow node types (Overlay/Modal/out-of-flow defs) — their
    *  cells render with `display:contents` so they occupy no flow space. */
   isOutOfFlow: (name: string) => boolean;
+  /** Direction of the enclosing Row/Col — a `Repeat` uses it to equal-fill its
+   *  N items along that axis (each 1/N). Absent at the page root. */
+  parentDirection?: 'row' | 'column';
+  /** True when the enclosing container is content-flow (fits or scrolls its main
+   *  axis) — a `Repeat` then content-sizes its items (they stack + scroll) rather
+   *  than equal-filling. */
+  parentContentFlow?: boolean;
 }
 
 /**
@@ -1649,7 +1656,16 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   if (LAYOUT_ITEMS.has(item.name)) {
     const direction = item.name === 'Row' ? 'row' : 'column';
     const { justifyContent, alignItems } = anchorToFlexProps(item.anchor, direction);
-    const children = item.children.map(child => convertItem(child, ctx));
+    // Content-flow if this container fits or scrolls its MAIN axis — a nested
+    // Repeat then content-sizes (stacks + scrolls) instead of equal-filling.
+    const st = item.style ?? {};
+    const isScroll =
+      st.overflow === 'auto' || st.overflow === 'scroll' ||
+      (direction === 'column' ? (st.overflowY === 'auto' || st.overflowY === 'scroll')
+                              : (st.overflowX === 'auto' || st.overflowX === 'scroll'));
+    const contentFlow = !!(direction === 'column' ? item.fit?.h : item.fit?.w) || isScroll;
+    const childCtx: ConvertCtx = { ...ctx, parentDirection: direction, parentContentFlow: contentFlow };
+    const children = item.children.map(child => convertItem(child, childCtx));
     // Content-flow: a container hugged on its MAIN axis lays its children out by
     // content (they pack) instead of tiling. The container keeps its own size;
     // each child's main-axis size is dropped so it shrinks to content, and the
@@ -1711,7 +1727,15 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // slotChildren is passed through so a `Children` marker nested inside a
   // definition's component still resolves.
   const id = genId(item.name.toLowerCase());
-  ctx.components.push(buildComponentDef(item, id));
+  const def = buildComponentDef(item, id);
+  // A `Repeat` in a definite (non-content-flow) container equal-fills its N items
+  // along the parent's main axis — pass the direction so the builtin lays the
+  // items out flex:1 each. In a content-flow (fit/scroll) container it's left to
+  // content-size (items stack + scroll).
+  if (item.name === 'Repeat' && ctx.parentDirection && !ctx.parentContentFlow) {
+    def.props = { ...def.props, fillDirection: ctx.parentDirection };
+  }
+  ctx.components.push(def);
   const children = item.children.map(child => convertItem(child, ctx));
   // A hugged component shrinks to its content; make its CELL content-width/height
   // too. Otherwise the cell keeps the dim's `width:100%`, which collapses to 0

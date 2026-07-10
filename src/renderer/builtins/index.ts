@@ -116,14 +116,29 @@ const Children = ({ slot, children, ...props }: ComponentProps) =>
 // (bound via `Repeat(@items)`), exposing each element as the current `item` so
 // the template can read `@item.field`. `data` is reactive: when the bound method
 // (e.g. a useQuery hook) returns new data, the rows re-render.
-const Repeat = ({ data, children, style, ...props }: ComponentProps) => {
+const Repeat = ({ data, children, style, fillDirection, ...props }: ComponentProps) => {
   const items = Array.isArray(data) ? data : [];
+  const dir = fillDirection as 'row' | 'column' | undefined;
+  // Equal-fill: N items each take 1/N of the parent's main axis. The repeat box
+  // becomes a flex line in that direction filling its cell, and each item is
+  // wrapped in a flex:1 cell. Without `fillDirection` (content-flow container),
+  // items just stack at their natural size and the container scrolls.
+  const boxStyle = dir
+    ? { display: 'flex', flexDirection: dir, width: '100%', height: '100%', ...(style as object) }
+    : style;
   return React.createElement(
     'div',
-    { 'data-isd-repeat': '', style, ...props },
-    items.map((item, i) =>
-      React.createElement(RepeatItemContext.Provider, { key: i, value: item }, children)
-    )
+    { 'data-isd-repeat': '', style: boxStyle, ...props },
+    items.map((item, i) => {
+      const content = dir
+        ? React.createElement(
+            'div',
+            { style: { flex: '1 1 0', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' } },
+            children
+          )
+        : children;
+      return React.createElement(RepeatItemContext.Provider, { key: i, value: item }, content);
+    })
   );
 };
 
