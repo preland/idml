@@ -1497,6 +1497,13 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     item.anchor, [headerRow, repeat], tableStyle
   );
   tableCol.className = item.className;
+  // Propagate the table's fit spec to the synthetic Col so a content-height
+  // (`fit-h`) or content-width (`fit-w`) table is detected as content-flow: its
+  // body `Repeat` then STACKS its rows (natural height) instead of equal-filling
+  // (`flex:1 1 0`), which would collapse to 0 inside the auto-height table and
+  // spill the rows past the card. A definite-height table (no fit-h) still
+  // equal-fills its rows to tile the reserved height.
+  if (item.fit) tableCol.fit = item.fit;
   return convertItem(tableCol, ctx);
 }
 
