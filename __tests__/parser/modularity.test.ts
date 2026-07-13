@@ -7,10 +7,10 @@ describe('idml parser — modularity limits', () => {
   it('allows up to 3 children per container', () => {
     expect(() =>
       parseIdml(
-        page(`Col()[100,100,top-left,hug-h] {
-  Text("a")[100,100,top-left]{}
-  Text("b")[100,100,top-left]{}
-  Text("c")[100,100,top-left]{}
+        page(`Col()[100,100,top-left] {
+  Text("a")[33,100,top-left]{}
+  Text("b")[33,100,top-left]{}
+  Text("c")[34,100,top-left]{}
 }`)
       )
     ).not.toThrow();
@@ -19,11 +19,11 @@ describe('idml parser — modularity limits', () => {
   it('rejects a 4th child in a container', () => {
     expect(() =>
       parseIdml(
-        page(`Col()[100,100,top-left,hug-h] {
-  Text("a")[100,100,top-left]{}
-  Text("b")[100,100,top-left]{}
-  Text("c")[100,100,top-left]{}
-  Text("d")[100,100,top-left]{}
+        page(`Col()[100,100,top-left] {
+  Text("a")[25,100,top-left]{}
+  Text("b")[25,100,top-left]{}
+  Text("c")[25,100,top-left]{}
+  Text("d")[25,100,top-left]{}
 }`)
       )
     ).toThrow(/exceeds the max of 3/);
@@ -65,7 +65,7 @@ Col()[100,100,top-left] {
   it('Table and Select are exempt leaves (columns/options do not count)', () => {
     expect(() =>
       parseIdml(
-        page(`Table(@rows)[100,100,top-left,hug-h] {
+        page(`Table(@rows)[100,100,top-left,fit-h] {
   Column("A")[10,25,top-left]{ Text(@item.a)[100,100,top-left]{} }
   Column("B")[10,25,top-left]{ Text(@item.b)[100,100,top-left]{} }
   Column("C")[10,25,top-left]{ Text(@item.c)[100,100,top-left]{} }

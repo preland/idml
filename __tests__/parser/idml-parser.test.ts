@@ -502,7 +502,7 @@ Text("a")[40,100,top-left]{}
 Text("b")[40,100,top-left]{}
 }
 `)
-    ).toThrow(/tile to 100%/);
+    ).toThrow(/must fill height exactly|need 100%/);
   });
 
   it('rejects a child that does not fill the cross axis', () => {

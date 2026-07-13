@@ -3,11 +3,14 @@ import { parseIdml } from '../../src/parser/idml-parser';
 import type { ComponentDef } from '../../src/types';
 import { findChromium, closeBrowser } from './measure';
 
-// `hug` is a content-sizing modifier: an element keeps its declared `[h,w]`
-// tile (so tiling is unchanged), but the bound component shrinks to its content
-// within that tile and truncates with an ellipsis if it would overflow. These
-// tests cover the conversion (the injected styles) and the real ellipsis
-// behaviour in a browser.
+// The exact-fill sizing model has three trailing keywords:
+//   fit | fit-w | fit-h    -> content-size the element, capped at its declared %
+//                            (the % IS still reserved in the tiling sum; the box
+//                            draws smaller and truncates with an ellipsis).
+//   hug                    -> fill the REMAINING main-axis space (flex: 1 1 0),
+//                            split equally with sibling `hug`s. (Was `grow`.)
+//   fill | fill-w | fill-h -> cross-axis stretch (align-self: stretch).
+// The retired keywords `grow`, `hug-w`, `hug-h` are now unknown-keyword errors.
 
 const CHROMIUM = findChromium();
 
@@ -22,13 +25,13 @@ function comp(src: string, type: string): ComponentDef {
   return c;
 }
 
-describe('hug — conversion injects content-sizing styles', () => {
-  it('hug shrinks both axes and adds ellipsis overflow', () => {
+describe('fit — content-sizing conversion (leaf components)', () => {
+  it('fit shrinks both axes and adds ellipsis overflow', () => {
     const b = comp(
       `
 ./p
 Col()[100,100,top-left] {
-Button("Create User", openCreate)[100,100,top-right,hug]{}
+Button("Create User", openCreate)[100,100,top-right,fit]{}
 }
 `,
       'Button'
@@ -45,12 +48,12 @@ Button("Create User", openCreate)[100,100,top-right,hug]{}
     });
   });
 
-  it('hug-w shrinks width only', () => {
+  it('fit-w shrinks width only', () => {
     const b = comp(
       `
 ./p
 Col()[100,100,top-left] {
-Text("Admin")[100,100,top-left,hug-w]{}
+Text("Admin")[100,100,top-left,fit-w]{}
 }
 `,
       'Text'
@@ -60,12 +63,12 @@ Text("Admin")[100,100,top-left,hug-w]{}
     expect(b.idmlStyle?.maxHeight).toBeUndefined();
   });
 
-  it('hug-h shrinks height only', () => {
+  it('fit-h shrinks height only', () => {
     const b = comp(
       `
 ./p
 Col()[100,100,top-left] {
-Button("X", noop)[100,100,top-left,hug-h]{}
+Button("X", noop)[100,100,top-left,fit-h]{}
 }
 `,
       'Button'
@@ -74,13 +77,14 @@ Button("X", noop)[100,100,top-left,hug-h]{}
     expect(b.idmlStyle?.width).toBeUndefined();
   });
 
-  it('leaves the element’s tile (cell size) unchanged', () => {
-    // The cell still occupies its declared 20%/100% so sibling tiling is intact.
+  it('leaves the element’s tile (cell size) unchanged — the % is still reserved', () => {
+    // The cell still occupies its declared 20%/100% so sibling tiling is intact;
+    // fit only shrinks the drawn box within the cell.
     const config = parseIdml(`
 ./p
 Row()[100,100,top-left] {
 Spacer()[100,80,top-left]{}
-Button("Create User", openCreate)[100,20,top-right,hug]{}
+Button("Create User", openCreate)[100,20,top-right,fit]{}
 }
 `);
     const row = config.pages[0].layout.children[0];
@@ -93,7 +97,7 @@ Button("Create User", openCreate)[100,20,top-right,hug]{}
 ./p
 PrimaryButton:Button \`bg-blue-600 text-white rounded\`
 define Bar() {
-PrimaryButton("Create User", openCreate)[100,100,top-right,hug]{}
+PrimaryButton("Create User", openCreate)[100,100,top-right,fit]{}
 }
 Col()[100,100,top-left] {
 Bar()[100,100,top-left]{}
@@ -104,16 +108,41 @@ Bar()[100,100,top-left]{}
   });
 });
 
-describe('hug — container content-flow', () => {
-  it('a hug-h container drops its children’s main-axis size (they pack)', () => {
+describe('fit — the reserved % is counted in the tiling sum', () => {
+  it('a fit main-% counts toward the tile (fit + fixed sibling fill exactly)', () => {
+    expect(() =>
+      parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[40,100,top-left,fit-h]{}
+Spacer()[60,100,top-left]{}
+}
+`)
+    ).not.toThrow();
+  });
+
+  it('a fit whose reserved % over-claims still throws', () => {
+    expect(() =>
+      parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[60,100,top-left,fit-h]{}
+Spacer()[60,100,top-left]{}
+}
+`)
+    ).toThrow(/over-claim/);
+  });
+});
+
+describe('fit — container content-flow (children pack)', () => {
+  it('a fit-h container keeps its size but drops its children’s main-axis size (they pack)', () => {
     const cfg = parseIdml(`
 ./p
 Col()[100,100,top-left] {
-Col()[100,100,top-left,hug-h] {
+Col()[100,100,top-left,fit-h] {
 Text("a")[50,100,top-left]{}
 Text("b")[50,100,top-left]{}
 }
-Spacer()[100,100,top-left]{}
 }
 `);
     const outer = cfg.pages[0].layout.children[0];
@@ -127,25 +156,38 @@ Spacer()[100,100,top-left]{}
     }
   });
 
-  it('relaxes the tile-sum rule when children pack (hug children)', () => {
-    // Two hug-h sections that together are NOWHERE near 100% — allowed because
-    // they flow/pack, with the rest of the column as explicit empty space.
+  it('a fit-h container is content-flow, so under-filling children are allowed', () => {
+    // The children pack/flow inside the content-sized container, so they need
+    // not tile to 100% — only over-claim is still rejected.
     expect(() =>
       parseIdml(`
 ./p
 Col()[100,100,top-left] {
-Col()[10,100,top-left,hug-h] {
-Text("a")[100,100,top-left]{}
-}
-Col()[10,100,top-left,hug-h] {
-Text("b")[100,100,top-left]{}
+Col()[100,100,top-left,fit-h] {
+Text("a")[10,100,top-left]{}
+Text("b")[10,100,top-left]{}
 }
 }
 `)
     ).not.toThrow();
   });
 
-  it('still enforces strict tiling for ordinary (non-hug) containers', () => {
+  it('a scrolling container is content-flow too (children stack + scroll)', () => {
+    expect(() =>
+      parseIdml(`
+./p
+ScrollCol:Col { overflowY: auto }
+Col()[100,100,top-left] {
+ScrollCol()[100,100,top-left] {
+Text("a")[10,100,top-left]{}
+Text("b")[10,100,top-left]{}
+}
+}
+`)
+    ).not.toThrow();
+  });
+
+  it('still enforces strict tiling for ordinary (definite) containers', () => {
     expect(() =>
       parseIdml(`
 ./p
@@ -154,18 +196,61 @@ Col()[10,100,top-left]{}
 Col()[10,100,top-left]{}
 }
 `)
-    ).toThrow(/tile to 100%/);
+    ).toThrow(/must fill height exactly|need 100%/);
   });
 });
 
-describe('fill — stretch to the flex line (inverse of hug)', () => {
+describe('hug — fills the remaining main-axis space (flex)', () => {
+  it('a hug child flex-grows, drops its main size, and absorbs the leftover', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[20,100,top-left,fit-h]{}
+Col()[80,100,top-left,hug] {
+Text("body")[100,100,top-left]{}
+}
+}
+`);
+    const outer = cfg.pages[0].layout.children[0];
+    const grown = outer.children[1];
+    expect(grown.idmlStyle).toMatchObject({ flexGrow: '1', flexShrink: '1', flexBasis: '0', minHeight: '0' });
+    // its main-axis (height) size is dropped so flex owns it
+    expect(grown.size?.height).toBeUndefined();
+  });
+
+  it('lets a fixed head + hug body coexist without a tile-sum error', () => {
+    expect(() =>
+      parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[20,100,top-left,fit-h]{}
+Spacer()[80,100,top-left,hug]{}
+}
+`)
+    ).not.toThrow();
+  });
+
+  it('throws when a hug has no remaining space to fill', () => {
+    expect(() =>
+      parseIdml(`
+./p
+Col()[100,100,top-left] {
+Text("head")[100,100,top-left]{}
+Spacer()[100,100,top-left,hug]{}
+}
+`)
+    ).toThrow(/needs remaining space/);
+  });
+});
+
+describe('fill — cross-axis stretch (align-self: stretch)', () => {
   it('a fill-h container keeps its size, packs children, and sets align-self', () => {
     const cfg = parseIdml(`
 ./p
 Row()[100,100,top-left] {
 Col()[100,50,top-left,fill-h] {
-Text("a")[100,100,top-left]{}
-Text("b")[100,100,top-left]{}
+Text("a")[50,100,top-left]{}
+Text("b")[50,100,top-left]{}
 }
 Col()[100,50,top-left,fill-h] {
 Text("c")[100,100,top-left]{}
@@ -199,66 +284,35 @@ Card()[100,50,top-left,fill-h]{}
   });
 });
 
-describe('grow — flex-grow to fill leftover main-axis space', () => {
-  it('a grow child flex-grows, drops its main size, and relaxes tiling', () => {
-    const cfg = parseIdml(`
-./p
-Col()[100,100,top-left] {
-Text("head")[100,100,top-left,hug-h]{}
-Col()[100,100,top-left,grow] {
-Text("body")[100,100,top-left]{}
-}
-}
-`);
-    const outer = cfg.pages[0].layout.children[0];
-    const grown = outer.children[1];
-    expect(grown.idmlStyle).toMatchObject({ flexGrow: '1', flexShrink: '1', flexBasis: '0', minHeight: '0' });
-    // its main-axis (height) size is dropped so flex owns it
-    expect(grown.size?.height).toBeUndefined();
-  });
-
-  it('lets a hug head + grow body coexist without a tile-sum error', () => {
-    expect(() =>
-      parseIdml(`
-./p
-Col()[100,100,top-left] {
-Text("head")[100,100,top-left,hug-h]{}
-Spacer()[100,100,top-left,grow]{}
-}
-`)
-    ).not.toThrow();
-  });
-});
-
-describe('hug — invalid placements are rejected', () => {
+describe('fit — invalid placements are rejected', () => {
   const cases: [string, string][] = [
     [
       'a Children slot',
-      `./p\ndefine D() {\nChildren()[100,100,top-left,hug]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left]{}\n}`,
+      `./p\ndefine D() {\nChildren()[100,100,top-left,fit]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left]{}\n}`,
     ],
   ];
   for (const [label, src] of cases) {
-    it(`throws for hug on ${label}`, () => {
+    it(`throws for fit on ${label}`, () => {
       expect(() => parseIdml(src)).toThrow(/cannot use hug|hug applies/);
     });
   }
 
-  // hug on a definition CALL is allowed — it content-sizes the expansion wrapper
-  // (a def call can't otherwise shrink), so e.g. a hug-h nav row is content-height.
-  it('hug-h on a definition call content-sizes the expansion wrapper', () => {
+  // fit on a definition CALL is allowed — it content-sizes the expansion wrapper
+  // (a def call can't otherwise shrink), so e.g. a fit-h nav row is content-height.
+  it('fit-h on a definition call content-sizes the expansion wrapper', () => {
     const layout = parseIdml(
-      `./p\ndefine D() {\nText("x")[100,100,top-left]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left,hug-h]{}\n}`
+      `./p\ndefine D() {\nText("x")[100,100,top-left]{}\n}\nCol()[100,100,top-left]{\nD()[100,100,top-left,fit-h]{}\n}`
     ).pages[0].layout;
     const wrapper = layout.children[0].children[0];
     expect(wrapper.idmlStyle?.height).toBe('fit-content');
   });
 
-  // A Table IS huggable — it expands to a Col of content-height rows, so `hug-h`
+  // A Table IS fittable — it expands to a Col of content-height rows, so `fit-h`
   // gives a content-height card (no dead space below the last row) by dropping
   // the fixed height while keeping the tiled width.
-  it('hug-h on a Table drops its fixed height (content-height card)', () => {
+  it('fit-h on a Table drops its fixed height (content-height card)', () => {
     const layout = parseIdml(
-      `./p\nCol()[100,100,top-left]{\nTable(@r)[90,100,top-left,hug-h]{\nColumn("A")[10,100,top-left]{Text(@item.a)[100,100,top-left]{}}\n}\n}`
+      `./p\nCol()[100,100,top-left]{\nTable(@r)[100,100,top-left,fit-h]{\nColumn("A")[100,100,top-left]{Text(@item.a)[100,100,top-left]{}}\n}\n}`
     ).pages[0].layout;
     const findTable = (n: any): any => {
       if (n.children?.some((c: any) => (c.className ?? '').includes('bg-gray-50'))) return n;
@@ -279,20 +333,28 @@ describe('hug — invalid placements are rejected', () => {
       /unknown sizing keyword/
     );
   });
+
+  it('rejects the retired keywords grow / hug-w / hug-h as unknown', () => {
+    for (const kw of ['grow', 'hug-w', 'hug-h']) {
+      expect(() =>
+        parseIdml(`./p\nCol()[100,100,top-left]{\nText("x")[100,100,top-left,${kw}]{}\n}`)
+      ).toThrow(/unknown sizing keyword/);
+    }
+  });
 });
 
-describe.skipIf(!CHROMIUM)('hug — empirical content-size + ellipsis', () => {
+describe.skipIf(!CHROMIUM)('fit — empirical content-size + ellipsis', () => {
   const VW = 1000;
   const VH = 800;
 
-  it('a hugged button hugs content, far narrower than its full tile', async () => {
+  it('a fit button hugs content, far narrower than its full tile', async () => {
     // The button's tile is the full 1000px width, but a short label should hug
     // to a small content width (well under a third of the tile).
     const probe = await measureButton(
       `
 ./p
 Col()[100,100,top-left] {
-Button("OK", noop)[20,100,top-left,hug]{}
+Button("OK", noop)[20,100,top-left,fit]{}
 Col()[80,100,top-left]{}
 }
 `,
@@ -310,7 +372,7 @@ Col()[80,100,top-left]{}
 ./p
 Col()[100,100,top-left] {
 Row()[15,100,top-left] {
-Button("Overflows the tiny tile easily", noop)[100,10,top-left,hug]{}
+Button("Overflows the tiny tile easily", noop)[100,10,top-left,fit]{}
 Spacer()[100,90,top-left]{}
 }
 Col()[85,100,top-left]{}

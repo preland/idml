@@ -48,8 +48,8 @@ describe('visibility — rendering', () => {
     const cfg = parseIdml(`
 ./p
 Col()[100,100,top-left] {
-Button("toggle", flip)[50,100,top-left]{}
-Text("secret")[50,100,top-left] ?@state.open {}
+Button("toggle", flip)[100,100,top-left]{}
+Text("secret")[100,100,top-left] ?@state.open {}
 }
 `);
     const methods = [
