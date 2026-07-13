@@ -1103,6 +1103,14 @@ function makeOutOfFlowPredicate(defs: Map<string, ParsedItem[]>): (name: string)
   return (name: string) => OUT_OF_FLOW.has(name) || (defs.has(name) && defIsOutOfFlow(name, defs));
 }
 
+/** True when a node is taken out of the flex flow by an explicit
+ *  `position: absolute|fixed` style prop (from an inline block or a variant),
+ *  so it is neither tiled nor cross-axis-checked. */
+function isAbsolute(style?: Record<string, string>): boolean {
+  const p = style?.position;
+  return p === 'absolute' || p === 'fixed';
+}
+
 function validateTiling(
   children: ParsedItem[],
   direction: 'row' | 'column',
@@ -1112,8 +1120,12 @@ function validateTiling(
   containerGap?: boolean,
   containerScroll?: boolean
 ): void {
-  // Out-of-flow children (Overlay/Modal/out-of-flow defs) are positioned, not tiled.
-  children = children.filter((c) => !isOutOfFlow(c.name));
+  // Out-of-flow children are positioned, not tiled: Overlay/Modal/out-of-flow
+  // defs, plus anything explicitly `position: absolute|fixed` in its style (an
+  // absolutely-positioned element leaves the flex flow, so it neither counts
+  // toward the tiling sum nor must fill the cross axis — this is what lets an
+  // anchored hover-flyout live inside a normal container).
+  children = children.filter((c) => !isOutOfFlow(c.name) && !isAbsolute(c.style));
   if (children.length === 0) return;
   const main = direction === 'row' ? 'width' : 'height';
   const cross = direction === 'row' ? 'height' : 'width';
