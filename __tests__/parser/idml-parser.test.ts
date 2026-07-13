@@ -505,6 +505,24 @@ Text("b")[40,100,top-left]{}
     ).toThrow(/must fill height exactly|need 100%/);
   });
 
+  it('exempts a `position: absolute` child from tiling (anchored flyout)', () => {
+    // The single tiled child fills 100%; the absolutely-positioned flyout sits
+    // out of flow (via a styled variant) and neither over-claims nor is
+    // cross-axis-checked — so a hover-flyout can live inside a normal container.
+    expect(() =>
+      parseIdml(`
+Flyout:Col { position: absolute }
+./home
+Col()[100,100,top-left] {
+Text("icon")[100,100,center]{}
+Flyout()[100,40,top-left] {
+Text("hidden until hover")[100,100,top-left]{}
+}
+}
+`)
+    ).not.toThrow();
+  });
+
   it('rejects a child that does not fill the cross axis', () => {
     expect(() =>
       parseIdml(`
