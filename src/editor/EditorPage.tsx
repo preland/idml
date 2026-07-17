@@ -1,162 +1,167 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import type { UIConfig } from '../types';
-import { useEditorState } from './hooks/useEditorState';
-import { useSSEConfig } from './hooks/useSSEConfig';
-import { useSaveConfig } from './hooks/useSaveConfig';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ComponentTree } from './panels/ComponentTree';
 import { LivePreview } from './panels/LivePreview';
-import { PropertyPanel } from './panels/PropertyPanel';
+import { SourceEditPanel, type Origin, type Variant, type Values } from './panels/SourceEditPanel';
 
-export function EditorPage(): React.ReactElement {
-  const [initialConfig, setInitialConfig] = useState<UIConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+// The idml visual editor. It edits ONE page at a time (component ids are per-page
+// and must match the ids the real page renders as data-isd-id, so click-to-select
+// works). The centre pane is a live iframe of the real route; the right pane edits
+// the selected component's authored source and writes it back via /api/_isd/save.
 
-  useEffect(() => {
-    fetch('/api/_isd/config')
-      .then((r) => r.json())
-      .then((config: UIConfig) => {
-        setInitialConfig(config);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('[idml editor] Failed to load config:', err);
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
-    return <div style={{ padding: '16px' }}>Loading editor...</div>;
-  }
-
-  if (!initialConfig) {
-    return <div style={{ padding: '16px', color: '#dc2626' }}>Failed to load configuration</div>;
-  }
-
-  return <EditorShell initialConfig={initialConfig} />;
+interface PageComponent {
+  id: string;
+  type?: string;
+  components?: PageComponent[];
+}
+interface EditorPayload {
+  route: string;
+  file: string;
+  config: { pages: { route: string; components: PageComponent[] }[]; tokens?: unknown };
+  origins: Record<string, Origin>;
+  variants: Record<string, Variant>;
+  values: Record<string, Values>;
 }
 
-function EditorShell({ initialConfig }: { initialConfig: UIConfig }): React.ReactElement {
-  const { state, selectComponent, selectPage, updateConfig, undo, redo } =
-    useEditorState(initialConfig);
-  const { save, saving, error } = useSaveConfig();
+export function EditorPage(): React.ReactElement {
+  const [pages, setPages] = useState<{ route: string; file: string }[]>([]);
+  const [route, setRoute] = useState<string | null>(null);
+  const [data, setData] = useState<EditorPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewNonce, setPreviewNonce] = useState(0);
 
-  useSSEConfig((fresh) => {
-    updateConfig(fresh);
-  });
+  // Page list for the switcher.
+  useEffect(() => {
+    fetch('/api/_isd/pages')
+      .then((r) => r.json())
+      .then((d) => {
+        setPages(d.pages ?? []);
+        if (d.pages?.[0]) setRoute(d.pages[0].route);
+      })
+      .catch((e) => setError(String(e)));
+  }, []);
 
-  const activePage = state.config.pages.find((p) => p.route === state.selectedPageRoute);
-  const selectedComponent = activePage?.components.find((c) => c.id === state.selectedComponentId);
+  const loadConfig = useCallback((r: string) => {
+    setError(null);
+    fetch(`/api/_isd/config?route=${encodeURIComponent(r)}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          setData(null);
+          setError(e.error || `Failed to load ${r} (${res.status})`);
+          return;
+        }
+        setData(await res.json());
+      })
+      .catch((e) => setError(String(e)));
+  }, []);
+
+  useEffect(() => {
+    if (route) {
+      setSelectedId(null);
+      loadConfig(route);
+    }
+  }, [route, loadConfig]);
+
+  // Reload on any .idml change (our own saves, or an external editor).
+  useEffect(() => {
+    const es = new EventSource('/api/_isd/events');
+    es.onmessage = (ev) => {
+      try {
+        if (JSON.parse(ev.data).type === 'config:change' && route) {
+          loadConfig(route);
+          setPreviewNonce((n) => n + 1);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    return () => es.close();
+  }, [route, loadConfig]);
+
+  const onSaved = useCallback(() => {
+    if (route) loadConfig(route);
+    setPreviewNonce((n) => n + 1);
+  }, [route, loadConfig]);
+
+  const page = data?.config.pages[0];
+  const origin = selectedId ? data?.origins[selectedId] : undefined;
+  const variant = origin?.variant ? data?.variants[origin.variant] : undefined;
+  const values = selectedId ? data?.values[selectedId] : undefined;
+  const selectedType = selectedId ? findType(page?.components ?? [], selectedId) : undefined;
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', fontFamily: 'system-ui' }}>
-      {/* Left panel */}
+      {/* Left: page switcher + component tree */}
       <div style={{ width: '20%', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '8px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>
-          Structure
+        <div style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>idml editor</div>
+          <select
+            value={route ?? ''}
+            onChange={(e) => setRoute(e.target.value)}
+            style={{ width: '100%', padding: '4px', fontSize: '12px' }}
+          >
+            {pages.map((p) => (
+              <option key={p.route} value={p.route}>
+                {p.route}
+              </option>
+            ))}
+          </select>
         </div>
-        <ComponentTree
-          pages={state.config.pages}
-          selectedId={state.selectedComponentId}
-          onSelect={selectComponent}
-          onPageChange={selectPage}
-        />
-      </div>
-
-      {/* Center panel */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div
-          style={{
-            padding: '8px',
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            gap: '8px',
-            alignItems: 'center',
-            fontSize: '12px',
-          }}
-        >
-          <button
-            onClick={undo}
-            disabled={state.history.length === 0}
-            style={{
-              padding: '4px 8px',
-              fontSize: '11px',
-              cursor: state.history.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: state.history.length === 0 ? 0.5 : 1,
-            }}
-          >
-            ↶ Undo
-          </button>
-          <button
-            onClick={redo}
-            disabled={state.future.length === 0}
-            style={{
-              padding: '4px 8px',
-              fontSize: '11px',
-              cursor: state.future.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: state.future.length === 0 ? 0.5 : 1,
-            }}
-          >
-            ↷ Redo
-          </button>
-          <button
-            onClick={() => save(state.config)}
-            disabled={saving}
-            style={{
-              padding: '4px 8px',
-              fontSize: '11px',
-              background: '#dbeafe',
-              color: '#1a56db',
-              border: 'none',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            {saving ? '⋯ Saving' : '💾 Save'}
-          </button>
-          {error && (
-            <div style={{ fontSize: '10px', color: '#dc2626', flex: 1 }}>
-              Error: {error}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {page ? (
+            <ComponentTree
+              pages={[page] as never}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onPageChange={() => undefined}
+            />
+          ) : (
+            <div style={{ padding: '12px', fontSize: '12px', color: error ? '#dc2626' : '#6b7280' }}>
+              {error ?? 'Loading…'}
             </div>
           )}
         </div>
-        {activePage && (
-          <LivePreview pageRoute={state.selectedPageRoute} onComponentSelect={selectComponent} />
-        )}
       </div>
 
-      {/* Right panel */}
-      <div style={{ width: '25%', borderLeft: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
+      {/* Centre: live preview */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {route && <LivePreview pageRoute={route} onComponentSelect={setSelectedId} reloadNonce={previewNonce} />}
+      </div>
+
+      {/* Right: source editor */}
+      <div style={{ width: '26%', borderLeft: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '8px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>
-          Properties
+          Edit source
         </div>
         <div style={{ flex: 1, overflow: 'auto' }}>
-          {selectedComponent && activePage ? (
-            <PropertyPanel
-              component={selectedComponent}
-              tokens={state.config.tokens}
-              onChange={(updated) => {
-                const newPages = state.config.pages.map((p) =>
-                  p.route === state.selectedPageRoute
-                    ? {
-                        ...p,
-                        components: p.components.map((c) =>
-                          c.id === updated.id ? updated : c
-                        ),
-                      }
-                    : p
-                );
-                updateConfig({ ...state.config, pages: newPages });
-              }}
+          {route && (
+            <SourceEditPanel
+              route={route}
+              componentId={selectedId}
+              componentType={selectedType}
+              origin={origin}
+              variant={variant}
+              values={values}
+              onSaved={onSaved}
             />
-          ) : (
-            <div style={{ padding: '12px', fontSize: '12px', color: '#6b7280' }}>
-              Select a component to edit its properties
-            </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+/** Find a component's type by id in the (possibly nested) component list. */
+function findType(components: PageComponent[], id: string): string | undefined {
+  for (const c of components) {
+    if (c.id === id) return c.type;
+    if (c.components) {
+      const t = findType(c.components, id);
+      if (t) return t;
+    }
+  }
+  return undefined;
 }

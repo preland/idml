@@ -105,6 +105,9 @@ interface StyleEntry {
    *  its `` `class` `` block content — the write-back target for its styling. */
   classFile?: string;
   classSpan?: SourceSpan;
+  /** Source-tracking only: char offset just past the whole variant declaration —
+   *  where a clone of this variant is inserted. */
+  declEnd?: number;
 }
 
 // ==================== TOKENIZER ====================
@@ -168,6 +171,10 @@ export interface ItemSrc {
    *  variant it used — its class text lives at [[styleClassOrigin]] in the file
    *  where the variant is declared. */
   variant?: string;
+  /** True if the item was authored inside a `define { }` body (so its bytes are
+   *  SHARED by every call site). Page-level content threaded through a `Children`
+   *  slot is NOT marked — it belongs to the page, not the definition. */
+  fromDefine?: boolean;
 }
 
 /**
@@ -517,6 +524,9 @@ class IdmlParser {
   /** When true, parseItem records source spans into each ParsedItem.src and
    *  parseStyleDefs records variant class spans. Off on the normal parse path. */
   trackSource: boolean;
+  /** True while parsing a `define { }` body, so items authored there are flagged
+   *  `src.fromDefine` (shared across call sites) — see parseDefinition. */
+  private inDefineBody = false;
   styleRegistry: Map<string, StyleEntry> = new Map();
   // Reusable component definitions: name -> body template (item list). A `define`
   // block registers one; using the name as an item expands the body (macro-style),
@@ -740,9 +750,12 @@ class IdmlParser {
 
     this.consume('LBRACE');
     const body: ParsedItem[] = [];
+    const prevInDefine = this.inDefineBody;
+    this.inDefineBody = true;
     while (this.peek()?.type !== 'RBRACE') {
       body.push(this.parseItem());
     }
+    this.inDefineBody = prevInDefine;
     this.consume('RBRACE');
 
     this.defRegistry.set(name, body);
@@ -786,9 +799,17 @@ class IdmlParser {
       // classes (the common case) and/or pre-set args.
       const style = this.peek()?.type === 'LBRACE' ? this.parseStyleDefBody() : {};
 
+      // Offset just past the whole declaration (name…classes…body) — the anchor a
+      // clone is inserted after (source-tracking only). A trailing CLASS_BLOCK
+      // token's `end` is the content end (before the closing backtick), so add 1
+      // to land past the backtick; a `}`-terminated body / args end exactly.
+      const lastTok = this.tokens[this.pos - 1];
+      let declEnd = lastTok?.end;
+      if (lastTok?.type === 'CLASS_BLOCK' && declEnd != null) declEnd += 1;
+
       this.styleRegistry.set(name, {
         baseType, defaultArgs, style, className,
-        ...(this.trackSource ? { classFile: this.fileName, classSpan } : {}),
+        ...(this.trackSource ? { classFile: this.fileName, classSpan, declEnd } : {}),
       });
     }
   }
@@ -991,6 +1012,7 @@ class IdmlParser {
         anchor: anchorSpan,
         className: classNameSpan,
         variant: regEntry ? rawName : undefined,
+        fromDefine: this.inDefineBody || undefined,
       };
     }
 
@@ -1179,7 +1201,9 @@ interface ConvertCtx {
 function recordOrigin(ctx: ConvertCtx, id: string, item: ParsedItem, synthetic = false): void {
   if (!ctx.origins) return;
   const s = item.src;
-  const kind: ComponentOrigin['kind'] = synthetic ? 'synthetic' : ctx.expanding.size > 0 ? 'define' : 'direct';
+  // Shared iff authored inside a define body — NOT merely "produced during an
+  // expansion" (page content threaded through a Children slot is page-direct).
+  const kind: ComponentOrigin['kind'] = synthetic ? 'synthetic' : s?.fromDefine ? 'define' : 'direct';
   const origin: ComponentOrigin = {
     id,
     file: s?.file ?? '<entry>',
@@ -2186,11 +2210,28 @@ export interface ParseOptions {
   fileName?: string;
 }
 
+/** A styled variant (`Name:BaseType`) with the source facts a visual editor needs
+ *  to edit its class text in place, or clone it into a new local variant. */
+export interface VariantInfo {
+  name: string;
+  baseType: string;
+  /** File the variant is declared in. */
+  file: string;
+  /** Span of its `` `class` `` block content (the edit-everywhere target). */
+  classSpan?: SourceSpan;
+  /** Char offset just past the whole declaration — where a clone is inserted. */
+  declEnd?: number;
+  /** How many rendered components across all pages use this variant. */
+  usageCount: number;
+}
+
 /** Result of a source-tracking parse: the config plus, keyed by component id, the
- *  file + spans that produced each component (for a visual editor's write-back). */
+ *  file + spans that produced each component (for a visual editor's write-back),
+ *  and the variant table (for edit-everywhere / clone-here class edits). */
 export interface ParseWithSourceResult {
   config: UIConfig;
   origins: Map<string, ComponentOrigin>;
+  variants: Map<string, VariantInfo>;
 }
 
 /**
@@ -2212,7 +2253,7 @@ function parseIdmlCore(
   source: string,
   options: ParseOptions | undefined,
   trackSource: boolean
-): { config: UIConfig; origins?: Map<string, ComponentOrigin> } {
+): { config: UIConfig; origins?: Map<string, ComponentOrigin>; variants?: Map<string, VariantInfo> } {
   _idCounter = 0;
   const parser = new IdmlParser(tokenize(source), options?.fileName ?? '<entry>', trackSource);
   const parsedPages = parser.parseFile(options?.resolve);
@@ -2274,5 +2315,32 @@ function parseIdmlCore(
 
   const config: UIConfig = { version: '1', tokens: DEFAULT_TOKENS, pages };
   if (parser.darkStyles.length > 0) config.darkStyles = parser.darkStyles;
-  return { config, origins };
+
+  // Variant table with usage counts (source-tracking only) — how many rendered
+  // components use each styled variant, so the editor can say "used by N areas"
+  // and offer edit-everywhere vs clone-here.
+  let variants: Map<string, VariantInfo> | undefined;
+  if (trackSource) {
+    variants = new Map();
+    for (const [name, entry] of parser.styleRegistry) {
+      variants.set(name, {
+        name,
+        baseType: entry.baseType,
+        file: entry.classFile ?? '<entry>',
+        classSpan: entry.classSpan,
+        declEnd: entry.declEnd,
+        usageCount: 0,
+      });
+    }
+    if (origins) {
+      for (const o of origins.values()) {
+        if (o.variant) {
+          const v = variants.get(o.variant);
+          if (v) v.usageCount++;
+        }
+      }
+    }
+  }
+
+  return { config, origins, variants };
 }
