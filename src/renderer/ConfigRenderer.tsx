@@ -44,7 +44,7 @@ export function ConfigRenderer({ page }: ConfigRendererProps): React.ReactElemen
   return (
     <FormStateProvider>
       <div
-        data-isd-page={page}
+        data-idml-page={page}
         style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}
       >
         <LayoutRenderer layout={pageDef.layout} components={pageDef.components} />

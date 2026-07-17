@@ -11,7 +11,7 @@ export function useSaveConfig() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/_isd/config', {
+      const res = await fetch('/api/idml/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),

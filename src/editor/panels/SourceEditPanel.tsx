@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 
 // The editor's write-back panel. Given the selected component's origin + (if any)
 // its styled variant, it offers edit fields for the authored source and posts
-// each change to /api/_isd/save, which patches the .idml in place. className edits
+// each change to /api/idml/save, which patches the .idml in place. className edits
 // on a shared variant offer two modes: change the variant everywhere, or clone it
 // into a new variant used only here.
 
@@ -28,6 +28,7 @@ export interface Variant {
   usageCount: number;
 }
 export interface Values {
+  name?: string;
   text?: string;
   height?: string;
   width?: string;
@@ -77,7 +78,7 @@ export function SourceEditPanel({ route, componentId, componentType, origin, var
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch('/api/_isd/save', {
+      const res = await fetch('/api/idml/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ route, componentId, prop, value, mode }),

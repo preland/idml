@@ -1741,6 +1741,18 @@ function convertItem(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // are already wired as className value-bindings.
   if (item.classRefs?.length && !def.componentId) def.classRefs = item.classRefs;
   if (item.condClasses?.length) def.condClasses = item.condClasses;
+  // Give every authored node a stable editor id (both parse paths call genId
+  // identically, so the live page and the source-tracked editor config agree on
+  // ids — the visual editor matches iframe DOM to config by this id). Components
+  // reuse their component id (origin already recorded in convertNode); containers
+  // get a fresh id + their own origin so they're selectable/editable too.
+  if (def.componentId) {
+    def.nodeId = def.componentId;
+  } else {
+    const nid = genId('node');
+    def.nodeId = nid;
+    recordOrigin(ctx, nid, item);
+  }
   return def;
 }
 

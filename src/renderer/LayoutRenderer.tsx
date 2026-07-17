@@ -18,7 +18,7 @@ const toDimStr = (v: unknown): string | undefined =>
   v == null ? undefined : typeof v === 'number' ? `${v}%` : String(v);
 
 export function LayoutRenderer({ layout, components }: LayoutRendererProps): React.ReactElement | null {
-  const { config, debug } = useConfigContext();
+  const { config, debug, editorMode } = useConfigContext();
   // Reactive show/hide: a `?@ref` cell renders only when its ref is truthy.
   // Read contexts unconditionally to keep hook order stable.
   const item = React.useContext(RepeatItemContext);
@@ -156,7 +156,13 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
   // rendered and handed to the component as its slot, so the component decides
   // where they go (directly, or at a `Children` marker once definitions land).
   return (
-    <div ref={elRef} className={containerClass} style={containerStyle} data-isd-layout>
+    <div
+      ref={elRef}
+      className={containerClass}
+      style={containerStyle}
+      data-idml-node
+      data-idml-id={editorMode && layout.nodeId ? layout.nodeId : undefined}
+    >
       {boundComponent ? (
         <ComponentRenderer
           component={boundComponent}

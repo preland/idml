@@ -41,6 +41,12 @@ export interface ConfigContextValue {
    * preview can opt in to visualise layout structure.
    */
   debug: boolean;
+  /**
+   * True when the page is rendered inside the visual editor's preview iframe
+   * (detected from the `__idmlEditor` query param). Turns on `data-idml-id` on
+   * every node + the hover/right-click-select/highlight overlay machinery.
+   */
+  editorMode: boolean;
 }
 
 // Exported so tests (and other low-level consumers) can render the renderer
@@ -84,6 +90,20 @@ export function ConfigProvider({
 }: ConfigProviderProps): React.ReactElement | null {
   const [validConfig, setValidConfig] = useState<UIConfig | null>(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [editorMode, setEditorMode] = useState(false);
+
+  // Detect the editor preview iframe (client-only, so SSR stays deterministic).
+  // window.name (set on the iframe element) survives the app's client-side
+  // redirects; the query param is a fallback for a first paint before any nav.
+  useEffect(() => {
+    try {
+      const byName = window.name === '__idmlEditorPreview';
+      const byParam = new URLSearchParams(window.location.search).has('__idmlEditor');
+      setEditorMode(byName || byParam);
+    } catch {
+      /* non-browser */
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -109,21 +129,87 @@ export function ConfigProvider({
     }
   }, [components]);
 
-  // Attach click-to-select listener in dev mode
+  // Editor preview interaction: hover-highlight every node, right-click to select
+  // (persistent highlight in a distinct colour), and accept selection changes from
+  // the parent editor (tree / breadcrumb clicks). Overlays are pointer-events:none
+  // fixed boxes so they never block the underlying page. Because every pixel in an
+  // idml layout belongs to a tiled node, `closest('[data-idml-id]')` from the
+  // event target always resolves to the nearest authored node — so hovering the
+  // viewport always highlights something (a leaf, or its container).
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
+    if (!editorMode || typeof document === 'undefined') return;
 
-    const handler = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('[data-isd-id]');
-      if (target) {
-        const id = target.getAttribute('data-isd-id');
-        window.parent.postMessage({ type: 'isd:select', componentId: id }, window.location.origin);
+    const mkOverlay = (border: string, fill: string): HTMLDivElement => {
+      const d = document.createElement('div');
+      Object.assign(d.style, {
+        position: 'fixed', pointerEvents: 'none', zIndex: '2147483647',
+        border: `2px solid ${border}`, background: fill, boxSizing: 'border-box',
+        display: 'none', borderRadius: '2px', transition: 'left 40ms linear, top 40ms linear, width 40ms linear, height 40ms linear',
+      } as CSSStyleDeclaration);
+      document.body.appendChild(d);
+      return d;
+    };
+    const hoverBox = mkOverlay('#f59e0b', 'rgba(245,158,11,0.14)'); // amber = hover
+    const selBox = mkOverlay('#2563eb', 'rgba(37,99,235,0.14)'); // blue = selected
+    let selId: string | null = null;
+
+    const nodeFrom = (t: EventTarget | null): HTMLElement | null =>
+      t instanceof HTMLElement ? t.closest('[data-idml-id]') : null;
+    const elFor = (id: string | null): HTMLElement | null =>
+      id ? document.querySelector<HTMLElement>(`[data-idml-id="${(window.CSS?.escape ?? ((s: string) => s))(id)}"]`) : null;
+    const place = (box: HTMLDivElement, el: HTMLElement | null) => {
+      if (!el) { box.style.display = 'none'; return; }
+      const r = el.getBoundingClientRect();
+      box.style.display = 'block';
+      box.style.left = `${r.left}px`;
+      box.style.top = `${r.top}px`;
+      box.style.width = `${r.width}px`;
+      box.style.height = `${r.height}px`;
+    };
+    const placeSel = () => place(selBox, elFor(selId));
+
+    const onMove = (e: MouseEvent) => {
+      const node = nodeFrom(e.target);
+      const id = node?.getAttribute('data-idml-id') ?? null;
+      // Hide hover on the already-selected node so its blue highlight stands alone.
+      if (!node || (id && id === selId)) { hoverBox.style.display = 'none'; return; }
+      place(hoverBox, node);
+    };
+    const onLeave = () => { hoverBox.style.display = 'none'; };
+    const onContext = (e: MouseEvent) => {
+      const node = nodeFrom(e.target);
+      if (!node) return;
+      e.preventDefault();
+      selId = node.getAttribute('data-idml-id');
+      hoverBox.style.display = 'none';
+      placeSel();
+      window.parent.postMessage({ type: 'idml:select', componentId: selId }, window.location.origin);
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'idml:setSelection') {
+        selId = typeof e.data.id === 'string' ? e.data.id : null;
+        placeSel();
       }
     };
+    const onScroll = () => placeSel();
 
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseleave', onLeave);
+    document.addEventListener('contextmenu', onContext, true);
+    window.addEventListener('message', onMessage);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseleave', onLeave);
+      document.removeEventListener('contextmenu', onContext, true);
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+      hoverBox.remove();
+      selBox.remove();
+    };
+  }, [editorMode]);
 
   if (!validConfig) return null;
 
@@ -131,7 +217,7 @@ export function ConfigProvider({
   const darkCss = buildDarkCss(validConfig.darkStyles);
 
   return (
-    <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars, debug }}>
+    <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars, debug, editorMode }}>
       <div style={tokenVars as React.CSSProperties}>
         {darkCss ? <style dangerouslySetInnerHTML={{ __html: darkCss }} /> : null}
         {children}

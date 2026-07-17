@@ -108,7 +108,7 @@ Bordered()[100,100,top-left]{}
     const read = (w: number) =>
       measureDom(src, { exe: CHROMIUM!, viewport: { width: w, height: 1000 } }, () => {
         return Math.max(
-          ...Array.from(document.querySelectorAll('[data-isd-layout]')).map((el) =>
+          ...Array.from(document.querySelectorAll('[data-idml-node]')).map((el) =>
             parseFloat(getComputedStyle(el as HTMLElement).borderLeftWidth) || 0
           )
         );
@@ -131,7 +131,7 @@ PxBorder()[100,100,top-left]{}
     const read = (w: number) =>
       measureDom(src, { exe: CHROMIUM!, viewport: { width: w, height: 1000 } }, () => {
         return Math.max(
-          ...Array.from(document.querySelectorAll('[data-isd-layout]')).map((el) =>
+          ...Array.from(document.querySelectorAll('[data-idml-node]')).map((el) =>
             parseFloat(getComputedStyle(el as HTMLElement).borderLeftWidth) || 0
           )
         );

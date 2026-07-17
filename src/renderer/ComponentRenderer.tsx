@@ -28,7 +28,7 @@ export function ComponentRenderer({
   components,
   slot,
 }: ComponentRendererProps): React.ReactElement | null {
-  const { config } = useConfigContext();
+  const { config, editorMode } = useConfigContext();
   const isVisible = useVisibility(component.visibility);
   // Evaluate bindings before any early return so hook order stays stable —
   // a 'value' binding may call a method that is itself a hook (useQuery/useState).
@@ -67,7 +67,8 @@ export function ComponentRenderer({
     ...component.props,
     ...boundProps,
     style: tokenStyle,
-    'data-isd-id': component.id,
+    // Only tag nodes in the editor preview — keeps the shipped DOM clean.
+    ...(editorMode ? { 'data-idml-id': component.id } : {}),
   };
   // className = static author classes + any dynamic `@method` classes (resolved
   // into boundProps.className), merged so both apply.

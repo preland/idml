@@ -59,6 +59,6 @@ describe('Repeat (iteration)', () => {
       </ConfigProvider>
     );
     // Nothing to assert beyond "did not throw"; the repeat container is present.
-    expect(await screen.findByText((_, el) => el?.getAttribute('data-isd-repeat') === '')).toBeInTheDocument();
+    expect(await screen.findByText((_, el) => el?.getAttribute('data-idml-repeat') === '')).toBeInTheDocument();
   });
 });
