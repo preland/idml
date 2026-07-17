@@ -6,4 +6,11 @@ export { startWatcher, stopWatcher, addSSEWriter } from './next-plugin/watcher';
 export type { UIConfigOptions } from './next-plugin';
 
 // Parser is safe to use server-side (no React dependency)
-export { parseIdml } from './parser/idml-parser';
+export { parseIdml, parseIdmlWithSource } from './parser/idml-parser';
+export type {
+  ParseOptions,
+  ParseWithSourceResult,
+  ComponentOrigin,
+  SourceSpan,
+  ItemSrc,
+} from './parser/idml-parser';

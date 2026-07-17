@@ -47,4 +47,11 @@ export type {
 export { EditorPage } from './editor';
 
 // .idml parser
-export { parseIdml } from './parser/idml-parser';
+export { parseIdml, parseIdmlWithSource } from './parser/idml-parser';
+export type {
+  ParseOptions,
+  ParseWithSourceResult,
+  ComponentOrigin,
+  SourceSpan,
+  ItemSrc,
+} from './parser/idml-parser';
