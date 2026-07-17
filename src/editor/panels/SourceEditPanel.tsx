@@ -45,6 +45,13 @@ interface Props {
   onSaved: () => void;
 }
 
+// Valid idml anchors (vertical × horizontal, plus single-axis shorthands).
+const ANCHORS = [
+  'top-left', 'top-center', 'top-right',
+  'center-left', 'center', 'center-right',
+  'bottom-left', 'bottom-center', 'bottom-right',
+];
+
 const labelStyle: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '2px' };
 const inputStyle: React.CSSProperties = { width: '100%', padding: '4px 6px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '4px', boxSizing: 'border-box' };
 const btn: React.CSSProperties = { padding: '4px 8px', fontSize: '11px', border: 'none', borderRadius: '4px', cursor: 'pointer' };
@@ -91,7 +98,7 @@ export function SourceEditPanel({ route, componentId, componentType, origin, var
   }
 
   const shared = origin.kind === 'define';
-  const set = (k: keyof Values) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+  const set = (k: keyof Values) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setFields((f) => ({ ...f, [k]: e.target.value }));
 
   return (
@@ -139,7 +146,20 @@ export function SourceEditPanel({ route, componentId, componentType, origin, var
           {origin.spans.anchor && (
             <div style={{ marginTop: '6px' }}>
               <FieldRow label="Anchor">
-                <input style={inputStyle} value={fields.anchor ?? ''} onChange={set('anchor')} disabled={busy} />
+                <select
+                  style={inputStyle}
+                  value={ANCHORS.includes(fields.anchor ?? '') ? fields.anchor : ''}
+                  onChange={set('anchor')}
+                  disabled={busy}
+                >
+                  {/* Keep an out-of-list current value selectable rather than dropping it. */}
+                  {fields.anchor && !ANCHORS.includes(fields.anchor) && <option value={fields.anchor}>{fields.anchor}</option>}
+                  {ANCHORS.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
                 <SaveBtn onClick={() => save('anchor', fields.anchor ?? '')} busy={busy} />
               </FieldRow>
             </div>
@@ -171,6 +191,13 @@ export function SourceEditPanel({ route, componentId, componentType, origin, var
                   Only this one (clone)
                 </button>
               </div>
+              {shared && (
+                <div style={{ marginTop: '4px', fontSize: '10px', color: '#92400e' }}>
+                  This element is part of a reusable block — “only this one” clones the
+                  variant for this authored occurrence, which changes every instance
+                  rendered from that block.
+                </div>
+              )}
             </>
           ) : (
             <FieldRow label="">

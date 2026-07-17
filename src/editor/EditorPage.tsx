@@ -22,6 +22,7 @@ interface EditorPayload {
   origins: Record<string, Origin>;
   variants: Record<string, Variant>;
   values: Record<string, Values>;
+  undoDepth: number;
 }
 
 export function EditorPage(): React.ReactElement {
@@ -86,6 +87,18 @@ export function EditorPage(): React.ReactElement {
     setPreviewNonce((n) => n + 1);
   }, [route, loadConfig]);
 
+  const [undoing, setUndoing] = useState(false);
+  const undo = useCallback(async () => {
+    setUndoing(true);
+    try {
+      await fetch('/api/_isd/undo', { method: 'POST' });
+    } finally {
+      setUndoing(false);
+      if (route) loadConfig(route);
+      setPreviewNonce((n) => n + 1);
+    }
+  }, [route, loadConfig]);
+
   const page = data?.config.pages[0];
   const origin = selectedId ? data?.origins[selectedId] : undefined;
   const variant = origin?.variant ? data?.variants[origin.variant] : undefined;
@@ -97,7 +110,25 @@ export function EditorPage(): React.ReactElement {
       {/* Left: page switcher + component tree */}
       <div style={{ width: '20%', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
-          <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}>idml editor</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600 }}>idml editor</span>
+            <button
+              onClick={undo}
+              disabled={undoing || !data || data.undoDepth === 0}
+              title={data && data.undoDepth > 0 ? `Undo last save (${data.undoDepth})` : 'Nothing to undo'}
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: '1px solid #d1d5db',
+                background: '#fff',
+                cursor: !data || data.undoDepth === 0 || undoing ? 'not-allowed' : 'pointer',
+                opacity: !data || data.undoDepth === 0 ? 0.5 : 1,
+              }}
+            >
+              ↶ Undo{data && data.undoDepth > 0 ? ` (${data.undoDepth})` : ''}
+            </button>
+          </div>
           <select
             value={route ?? ''}
             onChange={(e) => setRoute(e.target.value)}
