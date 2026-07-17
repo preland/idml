@@ -52,6 +52,7 @@ export type {
   ParseOptions,
   ParseWithSourceResult,
   ComponentOrigin,
+  VariantInfo,
   SourceSpan,
   ItemSrc,
 } from './parser/idml-parser';

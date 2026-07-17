@@ -5,11 +5,14 @@ import React, { useRef, useEffect } from 'react';
 interface LivePreviewProps {
   pageRoute: string;
   onComponentSelect: (id: string) => void;
+  /** Bump to force the iframe to reload (e.g. after a save writes new source). */
+  reloadNonce?: number;
 }
 
 export function LivePreview({
   pageRoute,
   onComponentSelect,
+  reloadNonce = 0,
 }: LivePreviewProps): React.ReactElement {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -30,6 +33,7 @@ export function LivePreview({
       </div>
       <iframe
         ref={iframeRef}
+        key={reloadNonce}
         src={pageRoute}
         style={{
           flex: 1,

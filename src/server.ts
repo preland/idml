@@ -11,6 +11,11 @@ export type {
   ParseOptions,
   ParseWithSourceResult,
   ComponentOrigin,
+  VariantInfo,
   SourceSpan,
   ItemSrc,
 } from './parser/idml-parser';
+
+// Source-preserving write-back for the visual editor (server-only).
+export { applyEdits, planEdit } from './parser/source-writer';
+export type { SpanEdit, EditableProp, EditRequest, EditPlan } from './parser/source-writer';
