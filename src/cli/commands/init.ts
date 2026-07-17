@@ -130,7 +130,7 @@ export async function initCommand(options: { config: string; editor: boolean }) 
   console.log('\n✅ idml initialized!\n');
   console.log('Next steps:');
   console.log('  1. npm run dev');
-  console.log('  2. Visit http://localhost:3000/_isd-editor');
+  console.log('  2. Visit http://localhost:3000/idml/editor');
   console.log('  3. Click on components in the preview to edit them');
   console.log('\nDocumentation: https://github.com/...\n');
 }

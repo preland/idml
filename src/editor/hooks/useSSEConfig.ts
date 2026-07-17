@@ -5,14 +5,14 @@ import type { UIConfig } from '../../types';
 
 export function useSSEConfig(onConfigChange: (config: UIConfig) => void): void {
   const handleChange = useCallback(() => {
-    fetch('/api/_isd/config')
+    fetch('/api/idml/config')
       .then((r) => r.json())
       .then((raw: unknown) => onConfigChange(raw as UIConfig))
       .catch((err) => console.error('[idml editor] Failed to reload config:', err));
   }, [onConfigChange]);
 
   useEffect(() => {
-    const es = new EventSource('/api/_isd/events');
+    const es = new EventSource('/api/idml/events');
 
     es.onmessage = (event) => {
       try {

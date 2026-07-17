@@ -31,11 +31,11 @@ export function withUIConfig(
         const isdRewrites = editorEnabled
           ? [
               {
-                source: '/_isd-editor',
+                source: '/idml/editor',
                 destination: '/isd/editor',
               },
               {
-                source: '/_isd-editor/:path*',
+                source: '/idml/editor/:path*',
                 destination: '/isd/editor/:path*',
               },
             ]

@@ -20,7 +20,7 @@ import { LayoutRenderer } from '../../src/renderer/LayoutRenderer';
 import type { UIConfig } from '../../src/types';
 
 /** A measured DOM node: its pixel box plus computed `display`, mirroring the
- *  `LayoutDef` tree one-to-one (one `[data-isd-layout]` div per layout node). */
+ *  `LayoutDef` tree one-to-one (one `[data-idml-node]` div per layout node). */
 export interface Measured {
   x: number;
   y: number;
@@ -59,6 +59,7 @@ function htmlDoc(config: UIConfig, page: number): string {
         setDarkMode: () => {},
         tokenVars: {},
         debug: false,
+        editorMode: false,
       },
     },
     // Mirror ConfigRenderer's page wrapper: a 100vw × 100vh flex column, so the
@@ -66,7 +67,7 @@ function htmlDoc(config: UIConfig, page: number): string {
     React.createElement(
       'div',
       {
-        'data-isd-page': pageDef.route,
+        'data-idml-page': pageDef.route,
         style: { width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' },
       },
       React.createElement(LayoutRenderer, { layout: pageDef.layout, components: pageDef.components })
@@ -115,13 +116,13 @@ export async function measure(source: string, opts: MeasureOptions): Promise<Mea
     const walk = (el: Element): Measured => {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
-      const kids = Array.from(el.children).filter((c) => c.hasAttribute('data-isd-layout'));
+      const kids = Array.from(el.children).filter((c) => c.hasAttribute('data-idml-node'));
       return {
         x: r.x, y: r.y, width: r.width, height: r.height, display: cs.display, children: kids.map(walk),
       };
     };
-    const rootEl = document.querySelector('[data-isd-layout]');
-    if (!rootEl) throw new Error('no [data-isd-layout] root rendered');
+    const rootEl = document.querySelector('[data-idml-node]');
+    if (!rootEl) throw new Error('no [data-idml-node] root rendered');
     return walk(rootEl) as unknown as Measured;
   });
 }

@@ -90,7 +90,7 @@ describe('jsbio Users page (recreated in .idml)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create User' }));
 
     const heading = await screen.findByText('Create New User');
-    const modal = heading.closest('[data-isd-modal]') as HTMLElement;
+    const modal = heading.closest('[data-idml-modal]') as HTMLElement;
     expect(within(modal).getByText('Email')).toBeInTheDocument();
     expect(within(modal).getByText('Name')).toBeInTheDocument();
     expect(within(modal).getByText('Role')).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe('jsbio Users page (recreated in .idml)', () => {
     const { created } = renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Create User' }));
     const heading = await screen.findByText('Create New User');
-    const modal = heading.closest('[data-isd-modal]') as HTMLElement;
+    const modal = heading.closest('[data-idml-modal]') as HTMLElement;
 
     const inputs = modal.querySelectorAll('input');
     fireEvent.change(inputs[0], { target: { value: 'carol@x.com' } });
@@ -127,7 +127,7 @@ describe('jsbio Users page (recreated in .idml)', () => {
     fireEvent.click(editButtons[1]);
 
     const heading = await screen.findByText('Edit User');
-    const modal = heading.closest('[data-isd-modal]') as HTMLElement;
+    const modal = heading.closest('[data-idml-modal]') as HTMLElement;
     const inputs = modal.querySelectorAll('input');
     // Prefilled from Bob's record via the per-row `item` helper.
     expect((inputs[0] as HTMLInputElement).value).toBe('bob@x.com');

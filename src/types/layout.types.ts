@@ -30,6 +30,10 @@ export interface FlexDef {
   size?: SizeDef;
   children: LayoutDef[];
   componentId?: string;
+  /** Stable editor id for this node — components reuse their componentId,
+   *  containers get their own. Rendered as `data-idml-id` in editor mode so the
+   *  visual editor can select/highlight containers, not just components. */
+  nodeId?: string;
   idmlStyle?: Record<string, string>;
   className?: string;
   /** Dynamic `@method` class refs (resolved per render, like a component's, so a
@@ -83,6 +87,8 @@ export interface GridDef {
   size?: SizeDef;
   children: LayoutDef[];
   componentId?: string;
+  /** See FlexDef.nodeId. */
+  nodeId?: string;
   idmlStyle?: Record<string, string>;
   className?: string;
   /** Dynamic `@method` class refs (resolved per render, like a component's, so a

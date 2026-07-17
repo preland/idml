@@ -6,23 +6,47 @@ import { LivePreview } from './panels/LivePreview';
 import { SourceEditPanel, type Origin, type Variant, type Values } from './panels/SourceEditPanel';
 
 // The idml visual editor. It edits ONE page at a time (component ids are per-page
-// and must match the ids the real page renders as data-isd-id, so click-to-select
+// and must match the ids the real page renders as data-idml-id, so click-to-select
 // works). The centre pane is a live iframe of the real route; the right pane edits
-// the selected component's authored source and writes it back via /api/_isd/save.
+// the selected component's authored source and writes it back via /api/idml/save.
 
 interface PageComponent {
   id: string;
   type?: string;
   components?: PageComponent[];
 }
+// The rendered layout tree — used to compute a selected node's ancestor chain
+// (for the breadcrumb) since containers aren't in the flat `components` list.
+interface LayoutNode {
+  nodeId?: string;
+  componentId?: string;
+  children?: LayoutNode[];
+}
 interface EditorPayload {
   route: string;
   file: string;
-  config: { pages: { route: string; components: PageComponent[] }[]; tokens?: unknown };
+  config: { pages: { route: string; components: PageComponent[]; layout: LayoutNode }[]; tokens?: unknown };
   origins: Record<string, Origin>;
   variants: Record<string, Variant>;
   values: Record<string, Values>;
   undoDepth: number;
+}
+
+/** The chain of node ids from the outermost identified ancestor down to `targetId`
+ *  (inclusive), by walking the layout tree. Empty if not found. */
+function ancestorPath(root: LayoutNode | undefined, targetId: string): string[] {
+  if (!root) return [];
+  const walk = (node: LayoutNode, trail: string[]): string[] | null => {
+    const id = node.componentId ?? node.nodeId;
+    const here = id ? [...trail, id] : trail;
+    if (id === targetId) return here;
+    for (const child of node.children ?? []) {
+      const found = walk(child, here);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(root, []) ?? [];
 }
 
 export function EditorPage(): React.ReactElement {
@@ -35,7 +59,7 @@ export function EditorPage(): React.ReactElement {
 
   // Page list for the switcher.
   useEffect(() => {
-    fetch('/api/_isd/pages')
+    fetch('/api/idml/pages')
       .then((r) => r.json())
       .then((d) => {
         setPages(d.pages ?? []);
@@ -46,7 +70,7 @@ export function EditorPage(): React.ReactElement {
 
   const loadConfig = useCallback((r: string) => {
     setError(null);
-    fetch(`/api/_isd/config?route=${encodeURIComponent(r)}`)
+    fetch(`/api/idml/config?route=${encodeURIComponent(r)}`)
       .then(async (res) => {
         if (!res.ok) {
           const e = await res.json().catch(() => ({}));
@@ -68,7 +92,7 @@ export function EditorPage(): React.ReactElement {
 
   // Reload on any .idml change (our own saves, or an external editor).
   useEffect(() => {
-    const es = new EventSource('/api/_isd/events');
+    const es = new EventSource('/api/idml/events');
     es.onmessage = (ev) => {
       try {
         if (JSON.parse(ev.data).type === 'config:change' && route) {
@@ -91,7 +115,7 @@ export function EditorPage(): React.ReactElement {
   const undo = useCallback(async () => {
     setUndoing(true);
     try {
-      await fetch('/api/_isd/undo', { method: 'POST' });
+      await fetch('/api/idml/undo', { method: 'POST' });
     } finally {
       setUndoing(false);
       if (route) loadConfig(route);
@@ -103,7 +127,11 @@ export function EditorPage(): React.ReactElement {
   const origin = selectedId ? data?.origins[selectedId] : undefined;
   const variant = origin?.variant ? data?.variants[origin.variant] : undefined;
   const values = selectedId ? data?.values[selectedId] : undefined;
-  const selectedType = selectedId ? findType(page?.components ?? [], selectedId) : undefined;
+  const labelFor = (id: string) => data?.values[id]?.name ?? findType(page?.components ?? [], id) ?? id;
+  const selectedType = selectedId ? labelFor(selectedId) : undefined;
+  // Ancestor chain of the selection, so containers up the hierarchy are reachable
+  // by clicking a breadcrumb (they can't all be hit directly in the viewport).
+  const crumbs = selectedId && page ? ancestorPath(page.layout, selectedId) : [];
 
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', fontFamily: 'system-ui' }}>
@@ -159,7 +187,14 @@ export function EditorPage(): React.ReactElement {
 
       {/* Centre: live preview */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {route && <LivePreview pageRoute={route} onComponentSelect={setSelectedId} reloadNonce={previewNonce} />}
+        {route && (
+          <LivePreview
+            pageRoute={route}
+            onComponentSelect={setSelectedId}
+            selectedId={selectedId}
+            reloadNonce={previewNonce}
+          />
+        )}
       </div>
 
       {/* Right: source editor */}
@@ -167,6 +202,28 @@ export function EditorPage(): React.ReactElement {
         <div style={{ padding: '8px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>
           Edit source
         </div>
+        {/* Ancestor breadcrumb — click to select a container up the hierarchy. */}
+        {crumbs.length > 0 && (
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb', fontSize: '10px', display: 'flex', flexWrap: 'wrap', gap: '1px', alignItems: 'center', lineHeight: 1.6 }}>
+            {crumbs.map((id, i) => (
+              <React.Fragment key={id}>
+                {i > 0 && <span style={{ color: '#9ca3af', margin: '0 1px' }}>›</span>}
+                <button
+                  onClick={() => setSelectedId(id)}
+                  title={id}
+                  style={{
+                    fontSize: '10px', padding: '1px 4px', border: 'none', borderRadius: '3px', cursor: 'pointer',
+                    background: id === selectedId ? '#dbeafe' : 'transparent',
+                    color: id === selectedId ? '#1a56db' : '#374151',
+                    fontWeight: id === selectedId ? 600 : 400,
+                  }}
+                >
+                  {labelFor(id)}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {route && (
             <SourceEditPanel

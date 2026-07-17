@@ -66,7 +66,7 @@ const Icon = ({ name, ...props }: ComponentProps) =>
 // binding/column format; for now it renders a labelled placeholder so pages that
 // reference it compose and lay out correctly.
 const Table = ({ children, ...props }: ComponentProps) =>
-  React.createElement('div', { 'data-isd-table': '', ...props }, children ?? 'Table');
+  React.createElement('div', { 'data-idml-table': '', ...props }, children ?? 'Table');
 
 const Input = ({ type = 'text', value, onChange, onEnter, placeholder, name, disabled, style, ...props }: ComponentProps) =>
   React.createElement('input', {
@@ -128,7 +128,7 @@ const Repeat = ({ data, children, style, fillDirection, ...props }: ComponentPro
     : style;
   return React.createElement(
     'div',
-    { 'data-isd-repeat': '', style: boxStyle, ...props },
+    { 'data-idml-repeat': '', style: boxStyle, ...props },
     items.map((item, i) => {
       const content = dir
         ? React.createElement(
@@ -178,7 +178,7 @@ const Modal = ({ open, onClose, children, style, ...props }: ComponentProps) => 
   const panel = React.createElement(
     'div',
     {
-      'data-isd-modal': '',
+      'data-idml-modal': '',
       style: { ...MODAL_PANEL, ...style },
       onClick: (e: React.MouseEvent) => e.stopPropagation(),
       ...props,
@@ -186,7 +186,7 @@ const Modal = ({ open, onClose, children, style, ...props }: ComponentProps) => 
     children
   );
   return createPortal(
-    React.createElement('div', { 'data-isd-modal-backdrop': '', style: MODAL_BACKDROP, onClick: onClose }, panel),
+    React.createElement('div', { 'data-idml-modal-backdrop': '', style: MODAL_BACKDROP, onClick: onClose }, panel),
     document.body
   );
 };
@@ -217,8 +217,8 @@ const EMBED_INNER: React.CSSProperties = {
 const Embed = ({ children, style, ...props }: ComponentProps) =>
   React.createElement(
     'div',
-    { 'data-isd-embed': '', style: { ...style, ...EMBED_OUTER }, ...props },
-    React.createElement('div', { 'data-isd-embed-inner': '', style: EMBED_INNER }, children)
+    { 'data-idml-embed': '', style: { ...style, ...EMBED_OUTER }, ...props },
+    React.createElement('div', { 'data-idml-embed-inner': '', style: EMBED_INNER }, children)
   );
 
 export const BUILTIN_COMPONENTS = {
