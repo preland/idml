@@ -1,0 +1,15 @@
+// Read the two leading numbers of a `[h,w,align]` dimension list.
+read_two(int dir) {
+  adv();
+  read_two2(dir);
+} return void;
+
+read_two2(int dir) {
+  int hh = to_int(text_at(pos()));
+  read_two3(dir, hh);
+} return void;
+
+read_two3(int dir, int hh) {
+  int ww = next_num();
+  end_hdr(dir, hh, ww);
+} return void;

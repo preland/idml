@@ -4,6 +4,13 @@ A configuration-driven UI framework for Next.js 15 + TypeScript + Tailwind CSS.
 
 Define your entire UI (layout, theming, data bindings) in a single JSON config file. Changes are reflected instantly in development without full page reloads.
 
+> **idml is going code-agnostic (0.3.0+).** The `.idml` language is the contract;
+> the runtime is a pluggable *backend*. The default backend (`src/`) renders to a
+> React/Next tree in TypeScript. A new pure-[`id`](https://github.com/preland/id)
+> backend (`backends/id/`) renders the same `.idml` to native pixels with **no
+> TypeScript, JavaScript, or npm in the loop**. See
+> [`backends/id/README.md`](backends/id/README.md).
+
 ## Features
 
 - **Config-first**: Declare pages, layouts, components, and design tokens in `ui.config.json`

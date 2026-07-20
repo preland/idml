@@ -1,0 +1,14 @@
+// Finish a header: skip past the closing `]`, then publish the parsed dims.
+// dir_of maps a node name to a flex direction (Row -> horizontal, else column).
+end_hdr(int dir, int hh, int ww) {
+  goto_tok("]");
+  finish_hdr(dir, hh, ww);
+} return void;
+
+finish_hdr(int dir, int hh, int ww) {
+  adv();
+  set_hd(dir, hh, ww);
+} return void;
+
+dir_of(string t) {
+} return int (t == "Row");

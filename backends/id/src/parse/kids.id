@@ -1,0 +1,22 @@
+// Tile a parent's children along its main axis. `off` is the running main-axis
+// offset; each child's header is read (advancing the cursor), its pixel size
+// captured as locals before recursion, then it is placed. Stops at `}`.
+kids(int x, int y, int w, int h, int dir, int off) {
+  while(pos() < tok_count() && cur_is("}") == 0) {
+    read_hdr();
+    off = kid_step(x, y, w, h, dir, off);
+  }
+  adv();
+} return void;
+
+kid_step(int x, int y, int w, int h, int dir, int off) {
+  int cw = child_w(dir, w);
+  int ch = child_h(dir, h);
+  place(x, y, dir, off, cw, ch);
+} return int off + main_of(dir, cw, ch);
+
+place(int x, int y, int dir, int off, int cw, int ch) {
+  int cx = x + row_off(dir, off);
+  int cy = y + col_off(dir, off);
+  process(cx, cy, cw, ch, hd_dir());
+} return void;

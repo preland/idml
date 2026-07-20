@@ -1,0 +1,14 @@
+// Split the running main-axis offset onto the x or y axis by parent direction.
+row_off(int dir, int off) {
+  int r = 0;
+  if(dir == 1) {
+    r = off;
+  }
+} return int r;
+
+col_off(int dir, int off) {
+  int r = 0;
+  if(dir == 0) {
+    r = off;
+  }
+} return int r;

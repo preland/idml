@@ -1,0 +1,21 @@
+// Quoted strings ("...") and class-strings (`...`) store their inner text with
+// the delimiters stripped; every other single char is a punctuation token.
+read_str(int i) {
+  int j = i + 1;
+  while(j < len((import src)) && charat((import src), j) != 34) {
+    j = j + 1;
+  }
+  push_tok(3, slice((import src), i + 1, j));
+} return int j + 1;
+
+read_btick(int i) {
+  int j = i + 1;
+  while(j < len((import src)) && charat((import src), j) != 96) {
+    j = j + 1;
+  }
+  push_tok(6, slice((import src), i + 1, j));
+} return int j + 1;
+
+read_punct(int i) {
+  push_tok(5, chr(charat((import src), i)));
+} return int i + 1;

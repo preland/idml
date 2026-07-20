@@ -1,0 +1,15 @@
+// Drive the resolve+render: position the cursor at the page root, read its
+// header, and process it filling the whole window. set_mode picks the output.
+render() {
+  cur_init(scan_root(0));
+  process_root();
+} return void;
+
+process_root() {
+  read_hdr();
+  process(0, 0, 640, 460, hd_dir());
+} return void;
+
+set_mode(int m) {
+  lset((import mode), 0, m);
+} return void;

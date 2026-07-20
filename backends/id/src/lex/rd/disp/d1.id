@@ -1,0 +1,27 @@
+// Dispatch a single char to its token reader, one decision per function (the
+// 3-action/2-deep limits turn a switch into a chain). step skips whitespace by
+// defaulting the cursor to i+1; each stepper handles one class then defers.
+step(int i, int c) {
+  int r = i + 1;
+  if(is_space(c) == 0) {
+    r = step_b(i, c);
+  }
+} return int r;
+
+step_b(int i, int c) {
+  int r = i;
+  if(c == 35) {
+    r = read_hash(i);
+  } else {
+    r = step_c(i, c);
+  }
+} return int r;
+
+step_c(int i, int c) {
+  int r = i;
+  if(is_alpha(c)) {
+    r = read_ident(i);
+  } else {
+    r = step_d(i, c);
+  }
+} return int r;

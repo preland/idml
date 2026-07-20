@@ -1,0 +1,4 @@
+# build artifacts (produced by build.sh / verify.sh)
+idml-id
+*.ppm
+*.png

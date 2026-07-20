@@ -1,0 +1,9 @@
+// Accessors for the parsed header scratch (hd.id).
+hd_dir() {
+} return int (import hd)[0];
+
+hd_h() {
+} return int (import hd)[1];
+
+hd_w() {
+} return int (import hd)[2];

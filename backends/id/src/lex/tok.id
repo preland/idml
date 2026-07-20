@@ -1,0 +1,15 @@
+// The token stream: two parallel growable lists. tok_kind[i] is the token class
+// (1 ident, 2 number, 3 string, 4 colour #rrggbb, 5 punct, 6 class-string), and
+// tok_text[i] is its source text (quotes/backticks stripped for 3/6).
+tok_init() {
+  export string[] tok_text = [];
+  export int[] tok_kind = [];
+} return void;
+
+push_tok(int k, string t) {
+  push((import tok_kind), k);
+  push((import tok_text), t);
+} return void;
+
+tok_count() {
+} return int len((import tok_kind));

@@ -1,0 +1,12 @@
+// The header scratch: the most recently parsed node header, as [dir, h%, w%].
+// A node's direction is 1 for a Row, 0 otherwise (Col / leaf). Written by the
+// header reader and consumed immediately by the parent before it recurses.
+hd_init() {
+  export int[] hd = [0, 0, 0];
+} return void;
+
+set_hd(int dir, int hh, int ww) {
+  lset((import hd), 0, dir);
+  lset((import hd), 1, hh);
+  lset((import hd), 2, ww);
+} return void;
