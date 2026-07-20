@@ -82,7 +82,7 @@ export default function Home() {
 npm run dev
 ```
 
-Visit `http://localhost:3000/_isd-editor` to edit your UI visually.
+Visit `http://localhost:3000/idml/editor` to edit your UI visually.
 
 ## Architecture
 
