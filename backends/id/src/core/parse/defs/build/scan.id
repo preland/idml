@@ -1,0 +1,19 @@
+// Build the definition table from the tokens before the layout root. One pass:
+// spot each `Name : Kind` header, and attach `bg:`/`fg:` colours to the last
+// definition seen.
+scan_defs(int root) {
+  def_init();
+  def_loop(0, root);
+} return void;
+
+def_loop(int i, int root) {
+  while(i < root) {
+    def_step(i);
+    i = i + 1;
+  }
+} return void;
+
+def_step(int i) {
+  handle_def(i);
+  handle_prop(i);
+} return void;

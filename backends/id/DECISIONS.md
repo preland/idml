@@ -61,10 +61,26 @@ Percentages resolve with round-to-nearest (`(v*pct+50)/100`) to match
 `build-scene.mjs`'s `Math.round`, so the two resolvers agree to the pixel on
 `todo.idml` (floor-division drifted 1–3 px on nested boxes).
 
-## Scope held for later (not done in 0.3.0)
+## Done after the first cut (still 0.3.0)
 
-Colours-from-`define`, `define`-aware direction, and text rendering were scoped
-out to land a **working, verified core** rather than a larger unfinished one. The
-lexer already tokenizes the colours/classes those need; the roadmap in README.md
-lists each as an additive step. Tailwind class references were explicitly out of
-scope per the 0.3.0 request (a styling-wrapper syntax will replace them later).
+Colours-from-`define`, `define`-aware direction, and text rendering — first
+deferred to land a working core — are now implemented and verified (a real
+palette from the `define` block, direction from each node's base kind, and an
+8×8 bitmap-font label per node). The `examples/stress-test.idml` diagnostic
+exercises all of them and `verify.sh` asserts the result pixel-by-pixel.
+
+During this the whole `src/` tree was restructured into a strict rule-of-3
+directory tree so it builds under **both** `bin/idc` and the reference `idc.py`
+(the trigger: the font pushed `bin/idc` to fall back to `idc.py`, which enforces
+the ≤3-entries/dir rule the flat tree violated). Because id resolves calls
+globally, that was a pure file move — and `idc.py`'s type checker then caught two
+real bugs `bin/idc` had accepted (reusing the int-typed `lset`/param names for a
+`string[]`), now fixed with a separate `lset_s`.
+
+## Scope still held for later
+
+**Data bindings** (`@ref`/`~model`/handlers) are parsed but not resolved — no
+app data source, so binding-only nodes draw no text. **Emitting `layout.gen.id`**
+(to delete `build-scene.mjs`) is the one remaining roadmap step. **Tailwind class
+references** stay out of scope per the 0.3.0 request (a styling-wrapper syntax
+will replace them later). Hex colours are lowercase/decimal-only.

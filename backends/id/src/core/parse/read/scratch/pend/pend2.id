@@ -1,0 +1,8 @@
+// Mutators for the pending text label (pend.id owns the storage).
+set_ptext(string t) {
+  lset_s((import ptext), 0, t);
+} return void;
+
+reset_text() {
+  lset_s((import ptext), 0, "");
+} return void;

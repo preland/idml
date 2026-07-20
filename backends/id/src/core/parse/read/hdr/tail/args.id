@@ -1,0 +1,15 @@
+// Skip a node's `(args)` on the way to its `[dims]`, capturing the first string
+// literal as the node's text label (e.g. Title("id . todo") or AddBtn("Add")).
+scan_args() {
+  while(cur_is("[") == 0) {
+    grab(pos());
+  }
+} return void;
+
+grab(int i) {
+  int r = 0;
+  if(kind_at(i) == 3) {
+    set_ptext(text_at(i));
+  }
+  adv();
+} return void;

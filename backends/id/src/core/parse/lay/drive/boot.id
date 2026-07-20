@@ -1,0 +1,17 @@
+// One-time state setup: the framebuffer, the bitmap font, the header scratch,
+// the pending colour/text scratch, and the render/-rects mode flag.
+init_all() {
+  fb_init(640, 460);
+  font_data();
+  init_rest();
+} return void;
+
+init_rest() {
+  hd_init();
+  pend_init();
+  mode_reset();
+} return void;
+
+mode_reset() {
+  export int[] mode = [0];
+} return void;

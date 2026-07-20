@@ -1,0 +1,25 @@
+// A node's flex direction from its name: the built-ins Row/Col win; any other
+// name resolves through its definition (a `define`-aware direction), defaulting
+// to column.
+dir_of(string name) {
+  int r = builtin_dir(name);
+  if(r < 0) {
+    r = def_dir_of(name);
+  }
+} return int r;
+
+builtin_dir(string name) {
+  int r = 0 - 1;
+  if(name == "Row") {
+    r = 1;
+  } else {
+    r = col_dir(name);
+  }
+} return int r;
+
+col_dir(string name) {
+  int r = 0 - 1;
+  if(name == "Col") {
+    r = 0;
+  }
+} return int r;

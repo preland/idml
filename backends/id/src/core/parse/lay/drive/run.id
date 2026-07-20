@@ -1,6 +1,7 @@
-// Drive the resolve+render: position the cursor at the page root, read its
-// header, and process it filling the whole window. set_mode picks the output.
+// Drive the resolve+render: build the definition table, position the cursor at
+// the page root, read its header, and process it filling the whole window.
 render() {
+  scan_defs(scan_root(0));
   cur_init(scan_root(0));
   process_root();
 } return void;

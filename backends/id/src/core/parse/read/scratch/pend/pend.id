@@ -1,0 +1,17 @@
+// Scratch for the node currently being read: its resolved bg/fg colour and text
+// label. Written by the header reader, consumed by the painter before recursion
+// reuses them (same discipline as the hd[] header scratch).
+pend_init() {
+  export int[] pbg = [0 - 1];
+  export int[] pfg = [0 - 1];
+  pend_init2();
+} return void;
+
+pend_init2() {
+  export string[] ptext = [""];
+} return void;
+
+set_pend(int bg, int fg) {
+  lset((import pbg), 0, bg);
+  lset((import pfg), 0, fg);
+} return void;

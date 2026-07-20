@@ -18,8 +18,15 @@ All notable changes to `idml-ui` are documented here. This project adheres to
 - The id backend's layout resolver reproduces the reference JS resolver
   (`id_development/nativeapp/scripts/build-scene.mjs`, which imports idml's TS
   parser) to the pixel on `todo.idml` — the piece that previously required Node
-  is now pure `id`. Build/run/verify and the supported `.idml` subset, decisions,
-  and roadmap are documented in `backends/id/README.md` and `DECISIONS.md`.
+  is now pure `id`.
+- The backend resolves **real colours and direction from the `define` block**
+  and draws **text labels** via a pure-`id` 8×8 bitmap font. It builds under both
+  id compilers (`bin/idc` and the strict `idc.py`), so `src/` fully honours id's
+  rule-of-3. A self-verifying `examples/stress-test.idml` exercises nesting,
+  Row/Col direction, colour parsing, exact-fill proportions, and text; `verify.sh`
+  checks it pixel-by-pixel. Build/run/verify, the supported `.idml` subset,
+  decisions, and roadmap are documented in `backends/id/README.md` and
+  `DECISIONS.md`.
 
 This release is additive: the TypeScript backend and public API are unchanged.
 

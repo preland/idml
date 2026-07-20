@@ -1,0 +1,14 @@
+// Recognise a `key : #colour` property line at position i, and handle `fg:`.
+is_prop(int i, string key) {
+  int r = 0;
+  if(text_at(i) == key && text_at(i + 1) == ":") {
+    r = kind_at(i + 2) == 4;
+  }
+} return int r;
+
+other_prop(int i) {
+  int r = 0;
+  if(is_prop(i, "fg")) {
+    set_last_fg(parse_color(text_at(i + 2)));
+  }
+} return void;

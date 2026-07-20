@@ -28,14 +28,36 @@ The only tool required is the `id` compiler (`bin/idc`) from an
 ID_REPO=~/git/id_development ./build.sh          # -> ./idml-id (native binary)
 
 # id has no file-open builtin, so a document is piped in on stdin:
-cat examples/todo.idml | ./idml-id            > frame.ppm   # render to a PPM image
-cat examples/todo.idml | ./idml-id --rects                  # print resolved x y w h rects
-magick frame.ppm frame.png                                  # (optional) PPM -> PNG
+cat examples/todo.idml        | ./idml-id          > frame.ppm   # render to a PPM image
+cat examples/stress-test.idml | ./idml-id          > stress.ppm  # the diagnostic (below)
+cat examples/todo.idml        | ./idml-id --rects                # print resolved x y w h rects
+magick frame.ppm frame.png                                       # (optional) PPM -> PNG
 ```
 
-`./verify.sh` builds and checks both paths headlessly (no display needed) — it
-asserts the demo layout's exact geometry and that `todo.idml` renders a full
-640×460 frame.
+The backend builds under **both** id compilers — `bin/idc` (primary) and the
+strict reference `idc.py` — so the whole `src/` tree honours id's rule-of-3
+(≤3 functions/file, ≤3 actions/block, ≤3 entries/directory).
+
+`./verify.sh` builds and checks everything headlessly (no display needed): the
+demo layout's exact geometry, a full `todo.idml` render, and the **stress test**
+checked pixel-by-pixel.
+
+### The stress test — `examples/stress-test.idml`
+
+A single `.idml` that renders correctly **only if every feature works**, so it
+doubles as a smoke test for a fresh build. Each region targets one feature:
+
+- **Title** — text rendering + a `define`'s `fg` colour.
+- **Swatches** — a `Row` of four equal cells: horizontal tiling + four parsed
+  `bg` colours + labels. Wrong direction stacks them; wrong colour parsing tints
+  them wrong.
+- **Grid** — a `Row` of two `Col`s, each split in two: a dark/light **checker-
+  board** that only comes out right if Row-vs-Col nesting alternates correctly.
+- **Bars** — a `Row` split 10/20/30/40: a left-to-right **staircase** that only
+  lines up if exact-fill percentage widths resolve to the right pixels.
+
+`verify.sh` asserts the checkerboard quadrants, swatch colours, staircase
+extremes, and title-ink presence — a broken or half-built backend fails there.
 
 ## How it works
 
@@ -64,45 +86,48 @@ card rect resolves to `90 41 461 377` — identical to the JS output. So the pie
 that previously required Node (`build-scene.mjs` imports idml's **TypeScript**
 `parseIdml`) is now done in pure `id`.
 
-## Supported `.idml` subset (0.3.0)
+## Supported `.idml` subset
 
-**Parsed & resolved:** the layout tree of `Row`/`Col`/leaf nodes with
-`[h, w, align]` percentage dimensions, arbitrary nesting, `(…)` argument lists
-(skipped for layout), `{ … }` / `{}` child blocks, `#` line comments, `#rrggbb`
-colours, and backtick class-strings. Percentage exact-fill layout for both axes.
+**Parsed, resolved & rendered:**
 
-**Known limitations / scope boundaries** (see `DECISIONS.md` for the why, and
-the roadmap below):
+- The layout tree of `Row`/`Col`/leaf nodes with `[h, w, align]` percentage
+  dimensions, arbitrary nesting, `(…)` argument lists, and `{ … }` / `{}` child
+  blocks. Percentage exact-fill layout for both axes.
+- The `define` block: `Name:Kind \`class\` { bg: #rrggbb  fg: #rrggbb }` →
+  **`define`-aware direction** (a node's flex direction is its definition's base
+  `Row`/`Col`) and **real colours** (each node fills with its `bg`; built-ins,
+  spacers, and text-only nodes are transparent).
+- **Text**: a node's first string argument is drawn as a label in its `fg`
+  colour, via a pure-`id` 8×8 bitmap font (vendored from
+  `id_development/nativeapp/gfx/draw/text`).
+- `#` line comments, `#rrggbb` colours (hex-lookahead disambiguates from
+  comments), backtick class-strings.
 
-- **Direction** is inferred from the node name: `Row` → horizontal, everything
-  else → vertical. For `todo.idml` this is correct for every container except a
-  1-child `Badge` (a `Row`-based `define`), where direction is moot. Full
-  resolution of a `define`'s base kind is not yet wired.
-- **Colours** in the render cycle a debug palette so nested regions read as
-  distinct blocks; they are **not** yet pulled from each node's `bg`/`fg`
-  `define`. The layout is what's proven here, not the skin.
-- **Text** is not yet drawn. `id_development/nativeapp` already has a pure-`id`
-  8×8 bitmap-font renderer (`gfx/draw/text`) to fold in.
+**Scope boundaries** (see `DECISIONS.md`; roadmap below):
+
+- **Data bindings** (`@ref`, `~model`, handlers) are parsed but not resolved —
+  they carry no literal, so e.g. `BadgeNum(@remaining)` draws no text. Wiring a
+  data source is app-level.
+- **Tailwind class references** are intentionally ignored — a styling-wrapper
+  syntax will replace them later (explicit 0.3.0 non-goal).
 - Sizing keywords beyond plain percentages (`hug`, `fit`, `fit-w/-h`) are
-  ignored — `todo.idml` uses plain percentages throughout.
+  ignored — the example `.idml`s use plain percentages throughout.
+- Hex colours are read as lowercase/decimal digits (uppercase A–F not mapped).
 
 ## Roadmap to fully retiring the JS build step
 
-The native app (`id_development/nativeapp`) still generates `layout.gen.id` +
-the font with two Node scripts (`build-scene.mjs`, `build-font.mjs`). To remove
-Node from that project entirely:
+The native app (`id_development/nativeapp`) still generates `layout.gen.id` with
+a Node script (`build-scene.mjs`, which imports idml's **TypeScript** parser).
+The parse + exact-fill layout + colours + text it needs are now all done here in
+pure `id`; what remains to delete that last Node step:
 
-1. **Colours from defines** — parse the leading `Name:Kind \`class\` { bg fg }`
-   block into a name→colour map (the lexer already emits the colour + class
-   tokens); use it in `paint`.
-2. **`define`-aware direction** — map each user node name to its base
-   `Row`/`Col`, replacing the name heuristic.
-3. **Text** — fold in nativeapp's `gfx/draw/text` + `glyphs.gen.id` (the font is
-   frozen public-domain data; `build-font.mjs` is only a one-off regenerator, so
-   it is already out of the build/run loop).
-4. **Emit `layout.gen.id`** — add a mode that prints the resolved geometry as
-   `id` source, so this backend *is* the scene compiler and `build-scene.mjs`
-   (the last Node in the loop) is deleted.
+1. **Emit `layout.gen.id`** — add an output mode that prints the resolved
+   geometry + palette as `id` source (the app's fixed slot legend), so this
+   backend *is* the scene compiler and `build-scene.mjs` is removed. (The font's
+   `build-font.mjs` emits frozen public-domain data and is already out of the
+   build/run loop.)
+2. **Data bindings** — resolve `@ref`/`~model` against an app-provided source so
+   dynamic text (counts, field values) renders.
 
-Each is additive; the parse + exact-fill core they build on is done and verified
-here.
+Both are additive on the parse + layout + paint core, which is done and verified
+here (see `verify.sh`).

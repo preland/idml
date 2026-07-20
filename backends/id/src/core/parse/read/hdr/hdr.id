@@ -1,0 +1,20 @@
+// Read one node header: `Name(args)[h,w,align]`, leaving the cursor just past
+// the closing `]`. Resolve the node's colours and direction from its name; reset
+// and capture its text label from the args; the first two numbers inside `[ ]`
+// are its height% and width%.
+read_hdr() {
+  set_pend(bg_of(text_at(pos())), fg_of(text_at(pos())));
+  skip_hdr(dir_of(text_at(pos())));
+} return void;
+
+skip_hdr(int dir) {
+  reset_text();
+  scan_args();
+  read_two(dir);
+} return void;
+
+goto_tok(string s) {
+  while(cur_is(s) == 0) {
+    adv();
+  }
+} return void;

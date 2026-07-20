@@ -1,0 +1,14 @@
+// Append a new definition's default colours (-1 = none), then let the property
+// scan (hand.id) overwrite the last row's bg/fg as it reads `bg:`/`fg:` lines.
+def_add2() {
+  push((import dbg), 0 - 1);
+  push((import dfg), 0 - 1);
+} return void;
+
+set_last_bg(int c) {
+  lset((import dbg), len((import dbg)) - 1, c);
+} return void;
+
+set_last_fg(int c) {
+  lset((import dfg), len((import dfg)) - 1, c);
+} return void;

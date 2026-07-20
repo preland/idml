@@ -1,0 +1,25 @@
+// A node's background/foreground colour from its definition (-1 if none / a
+// built-in like Row/Col/Spacer, which paint transparently).
+def_dir_of(string name) {
+  int k = def_idx(name);
+  int r = 0;
+  if(k >= 0) {
+    r = (import ddir)[k];
+  }
+} return int r;
+
+bg_of(string name) {
+  int k = def_idx(name);
+  int r = 0 - 1;
+  if(k >= 0) {
+    r = (import dbg)[k];
+  }
+} return int r;
+
+fg_of(string name) {
+  int k = def_idx(name);
+  int r = 0 - 1;
+  if(k >= 0) {
+    r = (import dfg)[k];
+  }
+} return int r;
