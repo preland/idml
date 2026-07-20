@@ -1,0 +1,16 @@
+// String helpers. slice(s,a,b) is the substring s[a:b] (id has no substring
+// builtin, so build it a char at a time). lset_s stores into a string[] element
+// via reference semantics (the int[] lset in gfx can't take a string list; and a
+// name keeps one type program-wide, so its list param is `ss`, not `xs`).
+slice(string s, int a, int b) {
+  string out = "";
+  int i = a;
+  while(i < b) {
+    out = out + chr(charat(s, i));
+    i = i + 1;
+  }
+} return string out;
+
+lset_s(string[] ss, int i, string sv) {
+  ss[i] = sv;
+} return void;

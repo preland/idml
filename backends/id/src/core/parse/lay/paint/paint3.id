@@ -1,0 +1,13 @@
+// Position and colour the label: 8x8 glyphs at scale 2 (16px tall), left-padded
+// 6px and vertically centred in the node's box; fg colour, or black if none.
+put_text(int x, int y, int h) {
+  draw_text(x + 6, y + (h - 16) / 2, (import ptext)[0], label_color(), 2);
+} return void;
+
+label_color() {
+  int c = (import pfg)[0];
+  int r = c;
+  if(c < 0) {
+    r = 0;
+  }
+} return int r;

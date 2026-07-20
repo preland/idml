@@ -1,0 +1,19 @@
+// Parse a `#rrggbb` colour token into a packed 0xRRGGBB int by accumulating its
+// six hex digits (id has no bitwise ops; base-16 accumulation gives the value
+// directly). Lowercase/decimal digits; see README for the hex-case note.
+parse_color(string s) {
+} return int hex_acc(s, 1, 0);
+
+hex_acc(string s, int i, int acc) {
+  int r = acc;
+  if(i < 7) {
+    r = hex_acc(s, i + 1, acc * 16 + hexval(charat(s, i)));
+  }
+} return int r;
+
+hexval(int c) {
+  int r = c - 48;
+  if(c >= 97) {
+    r = c - 87;
+  }
+} return int r;

@@ -1,0 +1,17 @@
+// Index of a definition by name, or -1. Recurses the parallel name list.
+def_idx(string name) {
+} return int find_name(name, 0);
+
+find_name(string name, int i) {
+  int r = 0 - 1;
+  if(i < len((import dn))) {
+    r = match_name(name, i);
+  }
+} return int r;
+
+match_name(string name, int i) {
+  int r = find_name(name, i + 1);
+  if((import dn)[i] == name) {
+    r = i;
+  }
+} return int r;

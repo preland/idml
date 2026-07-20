@@ -1,0 +1,20 @@
+// The component-definition table, built from the `Name:Kind `class` { bg fg }`
+// block that precedes the layout tree. Parallel lists keyed by definition name:
+// direction (1=Row/horizontal, 0=Col/vertical), and background/foreground colour
+// (a packed 0xRRGGBB, or -1 for "none").
+def_init() {
+  export string[] dn = [];
+  export int[] ddir = [];
+  def_init2();
+} return void;
+
+def_init2() {
+  export int[] dbg = [];
+  export int[] dfg = [];
+} return void;
+
+def_add(string name, int dir) {
+  push((import dn), name);
+  push((import ddir), dir);
+  def_add2();
+} return void;

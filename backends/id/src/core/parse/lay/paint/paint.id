@@ -1,0 +1,20 @@
+// Emit one node: in `--rects` mode print "x y w h"; otherwise fill its rect with
+// its resolved background colour and draw its text label (if any).
+draw_node(int x, int y, int w, int h) {
+  emit_node(x, y, w, h);
+} return void;
+
+emit_node(int x, int y, int w, int h) {
+  int r = 0;
+  if((import mode)[0] == 1) {
+    print(x + " " + y + " " + w + " " + h);
+  } else {
+    paint_rect(x, y, w, h);
+  }
+} return void;
+
+paint_rect(int x, int y, int w, int h) {
+  int bg = (import pbg)[0];
+  fill_bg(x, y, w, h, bg);
+  draw_label(x, y, w, h);
+} return void;
