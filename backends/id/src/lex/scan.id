@@ -1,0 +1,17 @@
+// The scan loop: walk the source once, char by char, threading the cursor `i`
+// through each step (id scalars are write-once, so a shared cursor is passed by
+// return, not mutated in place).
+lex() {
+  tok_init();
+  scan_loop(0);
+} return void;
+
+scan_loop(int i) {
+  while(i < len((import src))) {
+    i = scan_one(i);
+  }
+} return void;
+
+scan_one(int i) {
+  int c = charat((import src), i);
+} return int step(i, c);

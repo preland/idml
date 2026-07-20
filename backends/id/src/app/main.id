@@ -1,0 +1,19 @@
+// idml -> id backend: read an .idml document from stdin, resolve its percentage
+// layout to pixels, and either render it into a software framebuffer (dumped as
+// a PPM) or, with --rects, print the resolved rectangles. Pure id -- no JS.
+main(int argc, string[] argv) {
+  prep();
+  go(argc, argv);
+} return int 0;
+
+prep() {
+  slurp();
+  lex();
+  init_all();
+} return void;
+
+go(int argc, string[] argv) {
+  set_mode(mode_of(argc, argv));
+  render();
+  finish(argc, argv);
+} return void;

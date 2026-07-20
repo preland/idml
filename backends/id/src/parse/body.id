@@ -1,0 +1,18 @@
+// Render a node at pixel rect (x,y,w,h) with direction `dir`, then lay out its
+// `{ ... }` child block (if any) inside that rect.
+process(int x, int y, int w, int h, int dir) {
+  draw_node(x, y, w, h);
+  body(x, y, w, h, dir);
+} return void;
+
+body(int x, int y, int w, int h, int dir) {
+  int r = 0;
+  if(cur_is("{")) {
+    open_kids(x, y, w, h, dir);
+  }
+} return void;
+
+open_kids(int x, int y, int w, int h, int dir) {
+  adv();
+  kids(x, y, w, h, dir, 0);
+} return void;

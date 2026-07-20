@@ -1,0 +1,19 @@
+// '#' is either a colour literal (#rrggbb -- 6 hex digits) or a line comment.
+// We peek the next char: hex -> colour token, otherwise skip to end of line.
+read_hash(int i) {
+  int r = read_comment(i);
+  if(is_hex(charat((import src), i + 1))) {
+    push_tok(4, slice((import src), i, i + 7));
+    r = i + 7;
+  }
+} return int r;
+
+read_comment(int i) {
+  int j = i;
+  while(j < len((import src)) && charat((import src), j) != 10) {
+    j = j + 1;
+  }
+} return int j;
+
+is_hex(int c) {
+} return int is_digit(c) || (c >= 97 && c <= 102) || (c >= 65 && c <= 70);

@@ -1,0 +1,9 @@
+// Read the token at an index, and test the current token's text.
+kind_at(int i) {
+} return int (import tok_kind)[i];
+
+text_at(int i) {
+} return string (import tok_text)[i];
+
+cur_is(string s) {
+} return int text_at(pos()) == s;

@@ -1,0 +1,14 @@
+// Pick output mode from argv and, in render mode, dump the framebuffer as PPM.
+mode_of(int argc, string[] argv) {
+  int r = 0;
+  if(argc > 1 && argv[1] == "--rects") {
+    r = 1;
+  }
+} return int r;
+
+finish(int argc, string[] argv) {
+  int r = 0;
+  if((import mode)[0] == 0) {
+    dump_ppm();
+  }
+} return void;

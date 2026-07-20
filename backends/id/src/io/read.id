@@ -1,0 +1,5 @@
+// Slurp the whole .idml document from stdin into the exported `src`. id has no
+// file-open builtin, so a document reaches the tool by `cat file.idml | tool`.
+slurp() {
+  export string src = read_all();
+} return void;

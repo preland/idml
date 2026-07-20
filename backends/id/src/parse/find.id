@@ -1,0 +1,20 @@
+// Locate the page body: idml puts the layout tree after a `./` route marker.
+// scan_root returns the token index of the root node (just past `. /`).
+scan_root(int i) {
+  int r = i + 2;
+  if(i + 1 >= tok_count()) {
+    r = i;
+  } else {
+    r = scan_root2(i);
+  }
+} return int r;
+
+scan_root2(int i) {
+  int r = i + 2;
+  if(is_marker(i) == 0) {
+    r = scan_root(i + 1);
+  }
+} return int r;
+
+is_marker(int i) {
+} return int text_at(i) == "." && text_at(i + 1) == "/";

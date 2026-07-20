@@ -1,0 +1,10 @@
+// slice(s, a, b) -- the substring s[a:b]. id has no substring builtin, so we
+// build it one char at a time (charat -> byte code, chr -> 1-char string).
+slice(string s, int a, int b) {
+  string out = "";
+  int i = a;
+  while(i < b) {
+    out = out + chr(charat(s, i));
+    i = i + 1;
+  }
+} return string out;

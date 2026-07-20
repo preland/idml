@@ -1,0 +1,12 @@
+// Token cursor. id scalars are write-once, so the parse position lives in a
+// 1-cell list (reference semantics) that adv() mutates via px.id's lset.
+cur_init(int start) {
+  export int[] pc = [start];
+} return void;
+
+pos() {
+} return int (import pc)[0];
+
+adv() {
+  lset((import pc), 0, pos() + 1);
+} return void;

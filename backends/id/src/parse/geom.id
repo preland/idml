@@ -1,0 +1,24 @@
+// A child's pixel size from the parent's size and the child's percent header,
+// rounded to the nearest pixel (+50/100) to match the reference resolver. In a
+// Row the width is the child's w% of the parent (height fills); in a Col the
+// height is the child's h% of the parent (width fills).
+child_w(int dir, int w) {
+  int r = w;
+  if(dir == 1) {
+    r = (hd_w() * w + 50) / 100;
+  }
+} return int r;
+
+child_h(int dir, int h) {
+  int r = h;
+  if(dir == 0) {
+    r = (hd_h() * h + 50) / 100;
+  }
+} return int r;
+
+main_of(int dir, int cw, int ch) {
+  int r = ch;
+  if(dir == 1) {
+    r = cw;
+  }
+} return int r;

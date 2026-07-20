@@ -1,6 +1,6 @@
 {
   "name": "idml-ui",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "UI configuration framework for Next.js 15 + TypeScript + Tailwind CSS",
   "license": "MIT",
   "repository": {

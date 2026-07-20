@@ -1,0 +1,27 @@
+// Dispatch, continued: number, then string, then class-string, else punctuation.
+step_d(int i, int c) {
+  int r = i;
+  if(is_digit(c)) {
+    r = read_num(i);
+  } else {
+    r = step_e(i, c);
+  }
+} return int r;
+
+step_e(int i, int c) {
+  int r = i;
+  if(c == 34) {
+    r = read_str(i);
+  } else {
+    r = step_f(i, c);
+  }
+} return int r;
+
+step_f(int i, int c) {
+  int r = i;
+  if(c == 96) {
+    r = read_btick(i);
+  } else {
+    r = read_punct(i);
+  }
+} return int r;

@@ -1,0 +1,11 @@
+// The node fill colour cycles with a per-node counter so nested regions read
+// as distinct blocks; the layout is what's being verified, not the skin.
+bump() {
+  lset((import pcount), 0, (import pcount)[0] + 1);
+} return void;
+
+node_color() {
+} return int shade((import pcount)[0]);
+
+shade(int n) {
+} return int rgb(40 + n * 47 % 200, 70 + n * 29 % 170, 110 + n * 17 % 140);
