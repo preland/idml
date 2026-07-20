@@ -6,10 +6,12 @@ Define your entire UI (layout, theming, data bindings) in a single JSON config f
 
 > **idml is going code-agnostic (0.3.0+).** The `.idml` language is the contract;
 > the runtime is a pluggable *backend*. The default backend (`src/`) renders to a
-> React/Next tree in TypeScript. A new pure-[`id`](https://github.com/preland/id)
+> React/Next tree in TypeScript. A pure-[`id`](https://github.com/preland/id)
 > backend (`backends/id/`) renders the same `.idml` to native pixels with **no
-> TypeScript, JavaScript, or npm in the loop**. See
-> [`backends/id/README.md`](backends/id/README.md).
+> TypeScript, JavaScript, or npm in the loop**. Backends are independent — adding
+> one is additive and touches no shared code. See
+> [`backends/README.md`](backends/README.md) for the architecture and how to add
+> a backend, and [`backends/id/README.md`](backends/id/README.md) for the id one.
 
 ## Features
 
