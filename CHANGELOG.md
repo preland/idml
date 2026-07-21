@@ -7,6 +7,15 @@ All notable changes to `idml-ui` are documented here. This project adheres to
 
 ### Added
 
+- **`Repeat` lays out along either axis, in either mode.** A `Repeat` now flows
+  its items in its parent container's direction for BOTH layout modes: equal-fill
+  in a definite parent (each item 1/N of the axis) and natural-size + scroll in a
+  content-flow parent (the container fits or scrolls its main axis). Previously
+  the content-flow case was column-only, so a *horizontal* scrolling strip wasn't
+  expressible — now a `Row` with `overflowX: auto` (or `fit-w`) holding a `Repeat`
+  gives a horizontal strip, exactly as a scrolling `Col` gives a vertical list.
+  Backward-compatible: existing vertical lists and equal-fill grids are unchanged.
+
 - **idml is now backend-agnostic — first `id`-language backend (`backends/id/`).**
   idml starts to become a *code-agnostic* UI spec: the `.idml` language is the
   contract, and the runtime is a pluggable backend. Alongside the existing
