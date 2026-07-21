@@ -1970,12 +1970,16 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // definition's component still resolves.
   const id = genId(item.name.toLowerCase());
   const def = buildComponentDef(item, id);
-  // A `Repeat` in a definite (non-content-flow) container equal-fills its N items
-  // along the parent's main axis — pass the direction so the builtin lays the
-  // items out flex:1 each. In a content-flow (fit/scroll) container it's left to
-  // content-size (items stack + scroll).
-  if (item.name === 'Repeat' && ctx.parentDirection && !ctx.parentContentFlow) {
-    def.props = { ...def.props, fillDirection: ctx.parentDirection };
+  // A `Repeat` lays its items along the parent's main axis. In a DEFINITE parent
+  // it equal-fills (flex:1 each) via `fillDirection`; in a CONTENT-FLOW parent
+  // (the container fits or scrolls its main axis) items keep their natural size
+  // and the container scrolls, via `flowDirection`. Passing the parent's actual
+  // direction in BOTH cases makes a horizontal strip and a vertical list the same
+  // code path — a Row parent gives a horizontal Repeat, a Col parent a vertical
+  // one, for either mode.
+  if (item.name === 'Repeat' && ctx.parentDirection) {
+    const dirProp = ctx.parentContentFlow ? 'flowDirection' : 'fillDirection';
+    def.props = { ...def.props, [dirProp]: ctx.parentDirection };
   }
   ctx.components.push(def);
   recordOrigin(ctx, id, item);

@@ -116,21 +116,30 @@ const Children = ({ slot, children, ...props }: ComponentProps) =>
 // (bound via `Repeat(@items)`), exposing each element as the current `item` so
 // the template can read `@item.field`. `data` is reactive: when the bound method
 // (e.g. a useQuery hook) returns new data, the rows re-render.
-const Repeat = ({ data, children, style, fillDirection, ...props }: ComponentProps) => {
+const Repeat = ({ data, children, style, fillDirection, flowDirection, ...props }: ComponentProps) => {
   const items = Array.isArray(data) ? data : [];
-  const dir = fillDirection as 'row' | 'column' | undefined;
-  // Equal-fill: N items each take 1/N of the parent's main axis. The repeat box
-  // becomes a flex line in that direction filling its cell, and each item is
-  // wrapped in a flex:1 cell. Without `fillDirection` (content-flow container),
-  // items just stack at their natural size and the container scrolls.
+  // A Repeat lays its items out along ONE axis, in one of two modes (the parser
+  // picks based on whether the enclosing container is definite or content-flow):
+  //   - `fillDirection` (definite parent): EQUAL-FILL — N items each take 1/N of
+  //     the axis (wrapped in a flex:1 cell), filling the cell exactly.
+  //   - `flowDirection` (content-flow parent — the container fits or scrolls its
+  //     main axis): NATURAL — items keep their declared/content size (LayoutRenderer
+  //     cells are flex-shrink:0), so they pack along the axis and the container
+  //     scrolls when they overflow.
+  // Both are just a flex line in the given direction, so the SAME mechanism works
+  // for row or column — a vertical list and a horizontal strip differ only by the
+  // parent's direction, with no Repeat-specific code per case.
+  const fillDir = fillDirection as 'row' | 'column' | undefined;
+  const flowDir = flowDirection as 'row' | 'column' | undefined;
+  const dir = fillDir ?? flowDir;
   const boxStyle = dir
-    ? { display: 'flex', flexDirection: dir, width: '100%', height: '100%', ...(style as object) }
-    : style;
+    ? { display: 'flex', flexDirection: dir, width: '100%', height: '100%', minWidth: 0, minHeight: 0, ...(style as object) }
+    : style; // no layout info (unknown/legacy parent): plain block passthrough
   return React.createElement(
     'div',
     { 'data-idml-repeat': '', style: boxStyle, ...props },
     items.map((item, i) => {
-      const content = dir
+      const content = fillDir
         ? React.createElement(
             'div',
             { style: { flex: '1 1 0', minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' } },
