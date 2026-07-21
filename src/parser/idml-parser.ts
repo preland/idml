@@ -370,17 +370,21 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Number (may include decimal point)
-    if (/\d/.test(stripped[i])) {
-      let j = i;
+    // Number (may include a decimal point and a leading minus: 5, 0.42, -0.5).
+    // idml has no subtraction operator, so a leading `-` before a digit is a
+    // negative literal (e.g. a negative margin/offset in a style block).
+    if (/\d/.test(stripped[i]) || (stripped[i] === '-' && /\d/.test(stripped[i + 1] ?? ''))) {
+      let j = stripped[i] === '-' ? i + 1 : i;
       while (j < stripped.length && /[\d.]/.test(stripped[j])) j++;
       tokens.push({ type: 'NUMBER', value: parseFloat(stripped.slice(i, j)), start: i, end: j });
       i = j;
       continue;
     }
 
-    // Identifier (includes hyphenated keywords like top-left)
-    if (/[a-zA-Z_]/.test(stripped[i])) {
+    // Identifier — hyphenated keywords like `top-left`, and CSS values that begin
+    // with a hyphen such as vendor prefixes (`-webkit-box`, `-webkit-fill-available`).
+    // A leading `-` is only an identifier when a letter/underscore follows.
+    if (/[a-zA-Z_]/.test(stripped[i]) || (stripped[i] === '-' && /[a-zA-Z_]/.test(stripped[i + 1] ?? ''))) {
       let j = i;
       while (j < stripped.length && /[\w-]/.test(stripped[j])) j++;
       tokens.push({ type: 'IDENT', value: stripped.slice(i, j), start: i, end: j });

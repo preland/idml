@@ -7,6 +7,17 @@ All notable changes to `idml-ui` are documented here. This project adheres to
 
 ### Added
 
+- **Visual editor: parent highlight.** The preview now outlines the *parent
+  container* of the highlighted node (emerald) alongside the node itself (amber
+  hover / blue selection), so an element's container is always visible.
+
+### Fixed
+
+- **Style-block values may start with a hyphen.** The tokenizer now accepts
+  vendor-prefixed CSS values (`display: -webkit-box`) and negative numbers
+  (`marginTop: -0.5vw`) in a style block, instead of throwing "Unexpected
+  character '-'".
+
 - **`Repeat` lays out along either axis, in either mode.** A `Repeat` now flows
   its items in its parent container's direction for BOTH layout modes: equal-fill
   in a definite parent (each item 1/N of the axis) and natural-size + scroll in a
