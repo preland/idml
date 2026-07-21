@@ -129,9 +129,10 @@ export function ConfigProvider({
     }
   }, [components]);
 
-  // Editor preview interaction: hover-highlight every node, right-click to select
-  // (persistent highlight in a distinct colour), and accept selection changes from
-  // the parent editor (tree / breadcrumb clicks). Overlays are pointer-events:none
+  // Editor preview interaction: hover-highlight every node (amber), right-click to
+  // select (persistent blue), outline the highlighted node's PARENT container
+  // (emerald), and accept selection changes from the parent editor (tree /
+  // breadcrumb clicks). Overlays are pointer-events:none
   // fixed boxes so they never block the underlying page. Because every pixel in an
   // idml layout belongs to a tiled node, `closest('[data-idml-id]')` from the
   // event target always resolves to the nearest authored node — so hovering the
@@ -149,9 +150,13 @@ export function ConfigProvider({
       document.body.appendChild(d);
       return d;
     };
+    // The parent box renders first so it sits UNDER the hover/select boxes; its
+    // border hugs the parent's edges (outside the child) so the two never clash.
+    const parentBox = mkOverlay('#059669', 'rgba(5,150,105,0.09)'); // emerald = parent of the highlighted node
     const hoverBox = mkOverlay('#f59e0b', 'rgba(245,158,11,0.14)'); // amber = hover
     const selBox = mkOverlay('#2563eb', 'rgba(37,99,235,0.14)'); // blue = selected
     let selId: string | null = null;
+    let hoverEl: HTMLElement | null = null;
 
     const nodeFrom = (t: EventTarget | null): HTMLElement | null =>
       t instanceof HTMLElement ? t.closest('[data-idml-id]') : null;
@@ -167,15 +172,24 @@ export function ConfigProvider({
       box.style.height = `${r.height}px`;
     };
     const placeSel = () => place(selBox, elFor(selId));
+    // The nearest authored ancestor of `el` — its idml parent (null at the root).
+    const parentElOf = (el: HTMLElement | null): HTMLElement | null =>
+      el?.parentElement?.closest<HTMLElement>('[data-idml-id]') ?? null;
+    // Outline the parent of whichever node is currently emphasized (the hovered
+    // node, or the selected node when nothing is hovered), so the container an
+    // element sits in is always visible alongside it.
+    const showParent = (el: HTMLElement | null) => place(parentBox, parentElOf(el));
 
     const onMove = (e: MouseEvent) => {
       const node = nodeFrom(e.target);
       const id = node?.getAttribute('data-idml-id') ?? null;
+      hoverEl = node;
       // Hide hover on the already-selected node so its blue highlight stands alone.
-      if (!node || (id && id === selId)) { hoverBox.style.display = 'none'; return; }
-      place(hoverBox, node);
+      if (!node || (id && id === selId)) hoverBox.style.display = 'none';
+      else place(hoverBox, node);
+      showParent(node);
     };
-    const onLeave = () => { hoverBox.style.display = 'none'; };
+    const onLeave = () => { hoverEl = null; hoverBox.style.display = 'none'; showParent(elFor(selId)); };
     const onContext = (e: MouseEvent) => {
       const node = nodeFrom(e.target);
       if (!node) return;
@@ -183,15 +197,17 @@ export function ConfigProvider({
       selId = node.getAttribute('data-idml-id');
       hoverBox.style.display = 'none';
       placeSel();
+      showParent(node);
       window.parent.postMessage({ type: 'idml:select', componentId: selId }, window.location.origin);
     };
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type === 'idml:setSelection') {
         selId = typeof e.data.id === 'string' ? e.data.id : null;
         placeSel();
+        showParent(elFor(selId));
       }
     };
-    const onScroll = () => placeSel();
+    const onScroll = () => { placeSel(); showParent(hoverEl ?? elFor(selId)); };
 
     document.addEventListener('mousemove', onMove, true);
     document.addEventListener('mouseleave', onLeave);
@@ -208,6 +224,7 @@ export function ConfigProvider({
       window.removeEventListener('resize', onScroll);
       hoverBox.remove();
       selBox.remove();
+      parentBox.remove();
     };
   }, [editorMode]);
 

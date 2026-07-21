@@ -618,3 +618,26 @@ Button("Go", doIt)[100,100,top-left]{}
     expect(btn!.bindings ?? []).toContainEqual({ prop: 'onClick', methodId: 'doIt' });
   });
 });
+
+describe('idml parser — leading-hyphen style values', () => {
+  it('accepts a vendor-prefixed CSS value (-webkit-box) in a style block', () => {
+    const parse = () =>
+      parseIdml(`
+Clamp:Text \`text-gray-900\` { display: -webkit-box }
+./home
+Clamp("hi")[100,100,top-left]{}
+`);
+    expect(parse).not.toThrow();
+    const text = findComponent(parse().pages[0].components, 'Text');
+    expect(text!.idmlStyle?.display).toBe('-webkit-box');
+  });
+
+  it('accepts a negative number (with unit) in a style block', () => {
+    const node = parseIdml(`
+Neg:Col { marginTop: -0.5vw }
+./home
+Neg()[100,100,top-left]{}
+`).pages[0].layout.children[0];
+    expect(node.idmlStyle?.marginTop).toBe('-0.5vw');
+  });
+});
