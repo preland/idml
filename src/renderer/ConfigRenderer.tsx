@@ -7,9 +7,16 @@ import { FormStateProvider } from './form-context';
 
 export interface ConfigRendererProps {
   page: string;
+  /**
+   * Seed values for the page-level form-state scope, so `~name` model bindings
+   * start populated (e.g. an editor opened via a deep link with the record's
+   * fields). Read once when the scope mounts — remount (change `key`) to re-seed
+   * with async-loaded data. Omitted → the scope starts empty, as before.
+   */
+  initialFormValues?: Record<string, unknown>;
 }
 
-export function ConfigRenderer({ page }: ConfigRendererProps): React.ReactElement | null {
+export function ConfigRenderer({ page, initialFormValues }: ConfigRendererProps): React.ReactElement | null {
   const { config } = useConfigContext();
   const pageDef = config.pages.find((p) => p.route === page);
 
@@ -42,7 +49,7 @@ export function ConfigRenderer({ page }: ConfigRendererProps): React.ReactElemen
   // A page-level form-state scope so `~name` model bindings work without an
   // explicit Form; a Form component nests its own scope when isolation is wanted.
   return (
-    <FormStateProvider>
+    <FormStateProvider initial={initialFormValues}>
       <div
         data-idml-page={page}
         style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}
