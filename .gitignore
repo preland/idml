@@ -9,3 +9,4 @@ coverage/
 ui.config.schema.json
 testthing/
 *.idml
+tools/scale-bench/out*/
