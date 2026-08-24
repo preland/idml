@@ -42,6 +42,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:align": "vitest run __tests__/alignment",
+    "scale-bench": "node tools/scale-bench/bench.mjs --baseline tools/scale-bench/baseline.json",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx"
   },

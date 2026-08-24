@@ -1,0 +1,92 @@
+{
+  "baseUrl": "https://localhost:3000",
+  "settleMs": 1200,
+  "timeoutMs": 45000,
+  "ladder": [
+    0.9,
+    1,
+    1.1,
+    1.25,
+    1.4,
+    1.6,
+    1.8,
+    2
+  ],
+  "volumes": [
+    1,
+    1.35
+  ],
+  "thresholds": {
+    "minFontPx": 10,
+    "overlapRatio": 0.03,
+    "overlapAreaPx": 4
+  },
+  "viewports": [
+    {
+      "label": "netbook-1024x600",
+      "w": 1024,
+      "h": 600
+    },
+    {
+      "label": "laptop-1366x768",
+      "w": 1366,
+      "h": 768
+    },
+    {
+      "label": "fhd-1920x1080",
+      "w": 1920,
+      "h": 1080
+    },
+    {
+      "label": "ultrawide-2560x1080",
+      "w": 2560,
+      "h": 1080
+    },
+    {
+      "label": "banner-3440x768",
+      "w": 3440,
+      "h": 768
+    },
+    {
+      "label": "portrait-720x1280",
+      "w": 720,
+      "h": 1280
+    }
+  ],
+  "targets": [
+    {
+      "name": "assignments",
+      "path": "/admin/assignments"
+    },
+    {
+      "name": "changelog",
+      "path": "/admin/changelog"
+    },
+    {
+      "name": "users",
+      "path": "/admin/users"
+    },
+    {
+      "name": "feedback",
+      "path": "/admin/feedback"
+    },
+    {
+      "name": "completeness",
+      "path": "/admin/completeness"
+    },
+    {
+      "name": "relationships",
+      "path": "/admin/relationships",
+      "repeat": 3,
+      "tolerance": 1
+    },
+    {
+      "name": "explorer",
+      "path": "/admin/explorer",
+      "repeat": 3,
+      "tolerance": 1
+    }
+  ],
+  "repeat": 1,
+  "tolerance": 0
+}
