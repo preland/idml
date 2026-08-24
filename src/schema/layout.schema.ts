@@ -58,6 +58,7 @@ export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
         condClasses: z.array(ConditionalClassSchema).optional(),
         visibility: VisibilitySchema.optional(),
         dynamicSize: DynamicSizeSchema.optional(),
+        tabIndex: z.number().int().optional(),
       })
       .strict(),
     z
@@ -76,6 +77,7 @@ export const LayoutDefSchema: z.ZodType<any> = z.lazy(() =>
         condClasses: z.array(ConditionalClassSchema).optional(),
         visibility: VisibilitySchema.optional(),
         dynamicSize: DynamicSizeSchema.optional(),
+        tabIndex: z.number().int().optional(),
       })
       .strict(),
   ])

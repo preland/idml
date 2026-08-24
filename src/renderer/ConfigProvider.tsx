@@ -13,6 +13,21 @@ import { registerComponent, clearComponentRegistry } from './registry/component-
  *  the `dark` class and the element is inside an idml page). `!important` beats
  *  the light Tailwind utilities; selector specificity resolves any overlaps
  *  (e.g. a `.leaflet-container` reset beats the broad `.idml-root` color). */
+/** Rung 3 of the strain ladder: once whitespace is spent and a table cell still
+ *  cannot fit, it truncates — and clicking it reveals the full content. Focus is
+ *  the state, so no cell re-renders and no JS runs. The focused cell asks for its
+ *  natural width, which creates a row deficit its shrinkable siblings absorb —
+ *  they truncate to compensate, exactly as the ladder specifies. Wrapping is
+ *  allowed as the last resort when width alone is not enough. */
+const CELL_EXPAND_CSS = `
+.idml-cell:focus { flex-grow: 1; flex-basis: max-content; outline: none; z-index: 1; }
+.idml-cell:focus > .idml-cell-body {
+  overflow: visible; text-overflow: clip; white-space: normal;
+  overflow-wrap: anywhere; max-width: none;
+}
+.idml-cell:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+`;
+
 function buildDarkCss(rules?: DarkRule[]): string {
   if (!rules || rules.length === 0) return '';
   const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
@@ -236,6 +251,7 @@ export function ConfigProvider({
   return (
     <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars, debug, editorMode }}>
       <div style={tokenVars as React.CSSProperties}>
+        <style dangerouslySetInnerHTML={{ __html: CELL_EXPAND_CSS }} />
         {darkCss ? <style dangerouslySetInnerHTML={{ __html: darkCss }} /> : null}
         {children}
       </div>

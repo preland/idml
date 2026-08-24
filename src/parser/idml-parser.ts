@@ -56,6 +56,8 @@ interface ParsedItem {
   children: ParsedItem[];
   style: Record<string, string>;
   className?: string;
+  /** Set by the table expander so a truncated cell can take focus and expand. */
+  tabIndex?: number;
   /** Method ids referenced as `@x` tokens inside a class block — resolved per
    *  render (with the current row item) and appended to className. */
   classRefs?: string[];
@@ -1664,6 +1666,39 @@ function mkItem(
 }
 
 /**
+ * Build one table cell whose horizontal whitespace is SPENDABLE. The gutters are
+ * flex siblings of the content rather than `padding`, because padding never
+ * participates in flex shrinking: a cell with fixed padding can only truncate its
+ * text, however much empty space sits beside it. Carrying a large shrink factor,
+ * the gutters absorb nearly all of any width deficit first and collapse to zero
+ * before the content gives — so a strained column loses whitespace, then text.
+ */
+function mkCell(
+  col: ParsedItem,
+  children: ParsedItem[],
+  padY: string,
+  bodyClass?: string
+): ParsedItem {
+  const gutter = (): ParsedItem =>
+    mkItem('Col', [], 'auto', 'auto', 'top-left', [], {
+      flexGrow: '0', flexShrink: '1000', flexBasis: '1.6vw', minWidth: '0',
+    });
+  const body = mkItem('Col', [], 'auto', 'auto', col.anchor, children, {
+    flexGrow: '1', flexShrink: '1', flexBasis: 'auto', minWidth: '0',
+  });
+  body.className = ['idml-cell-body', bodyClass].filter(Boolean).join(' ');
+  const cell = mkItem('Row', [], 'auto', col.width, col.anchor, [gutter(), body, gutter()], {
+    paddingTop: padY, paddingBottom: padY,
+    // Shrinkable so a FOCUSED sibling can claim room from this cell. Harmless at
+    // rest: column widths already sum to 100%, so there is no deficit to absorb
+    // until one cell asks to expand.
+    flexShrink: '1', minWidth: '0',
+  });
+  cell.className = 'idml-cell';
+  return cell;
+}
+
+/**
  * Expand `Table(@data){ Column("H"){ cell } ... }` into existing primitives: a
  * header Row of column labels, then a Repeat over `@data` whose template is a Row
  * of one cell per column. Cell templates use `@item.field` and resolve per row via
@@ -1686,10 +1721,7 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     );
     label.className = 'font-medium text-gray-500 uppercase tracking-wider';
     // Cell padding is vw (not px-6/py-3) so the table is zoom-invariant.
-    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, [label], {
-      paddingLeft: '1.6vw', paddingRight: '1.6vw', paddingTop: '0.8vw', paddingBottom: '0.8vw',
-    });
-    return cell;
+    return mkCell(col, [label], '0.8vw');
   });
   const headerRow = mkItem('Row', [], 'auto', 100, 'top-left', headerCells, {
     borderBottom: '0.07vw solid #e5e7eb',
@@ -1699,10 +1731,8 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // Body cells carry the same horizontal padding and a comfortable vertical
   // rhythm; rows are separated by a light divider.
   const bodyCells = columns.map(col => {
-    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, col.children, {
-      paddingLeft: '1.6vw', paddingRight: '1.6vw', paddingTop: '1vw', paddingBottom: '1vw',
-    });
-    cell.className = 'whitespace-nowrap';
+    const cell = mkCell(col, col.children, '1vw', 'whitespace-nowrap');
+    cell.tabIndex = 0;
     return cell;
   });
   const bodyRowTemplate = mkItem('Row', [], 'auto', 100, 'top-left', bodyCells, {
@@ -1947,6 +1977,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       children,
       idmlStyle: containerStyle,
       ...(item.className ? { className: item.className } : {}),
+      ...(item.tabIndex !== undefined ? { tabIndex: item.tabIndex } : {}),
     };
   }
 
