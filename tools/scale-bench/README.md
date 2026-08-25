@@ -100,6 +100,22 @@ a cap that did not would leave the capped node's own children growing past it.
 page, with each element's DOM path, its idml node id where one is exposed, and
 the spec. **Nothing applies this to production yet** — see below.
 
+## Text the multiplier does not touch
+
+One exemption is not a policy but a property of the page: a font-size authored
+in **container-query units** (`8.47cqw` and friends) has already declared itself
+to be a constant share of its own box, and the multiplier leaves it alone.
+Scaling it would contradict the declaration — the reason to write a size that
+way is that the string must keep one share of its container whatever the user's
+setting.
+
+This is how `BrandText` in `jsbio/idml/styles.idml` is sized. It is the app's
+name rather than content, it is the widest fixed string in the narrowest box on
+the page, and pinning it moved the safe window from 1.1× to 1.4× on every page
+that shows the sidebar. The cost is real and deliberate: that one label does not
+grow for a user who raises their text size. Reach for this only where the string
+is chrome, never for content.
+
 ## Guarding the number: sweep
 
 ```sh

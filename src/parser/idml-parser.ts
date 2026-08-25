@@ -475,6 +475,19 @@ function assertNoLayoutClasses(classStr: string, where: string): void {
 
 // ==================== STYLE PROP MAPPER ====================
 
+/**
+ * Units a style-block value may carry. The container-query units size a value
+ * against the nearest ancestor declaring `containerType`, which is how a string
+ * is pinned to a constant share of its own box rather than of the viewport —
+ * the one way for text to be immune to a text-scale multiplier. They are legal
+ * in a style block only; `parseDimLiteral` still rejects every unit, because a
+ * [height,width] field is always a percentage of the parent.
+ */
+const STYLE_UNITS = new Set([
+  'vh', 'vw', 'px', 'rem', 'em',
+  'cqw', 'cqh', 'cqi', 'cqb', 'cqmin', 'cqmax',
+]);
+
 function applyStyleProp(key: string, val: string, result: Record<string, string>): void {
   switch (key) {
     case 'bg':       result.backgroundColor = val; break;
@@ -844,7 +857,7 @@ class IdmlParser {
     if (t.type === 'NUMBER') {
       const n = this.consume('NUMBER').value as number;
       const next = this.peek();
-      if (next?.type === 'IDENT' && ['vh', 'vw', 'px', 'rem', 'em'].includes(next.value as string)) {
+      if (next?.type === 'IDENT' && STYLE_UNITS.has(next.value as string)) {
         this.pos++;
         return `${n}${next.value}`;
       }
@@ -1055,7 +1068,7 @@ class IdmlParser {
   private parseDimLiteral(): string {
     const n = this.consume('NUMBER').value as number;
     const next = this.peek();
-    if (next?.type === 'IDENT' && ['vw', 'vh', 'px', 'rem', 'em'].includes(next.value as string)) {
+    if (next?.type === 'IDENT' && STYLE_UNITS.has(next.value as string)) {
       throw new Error(
         `[idml] dimensions are percentages of the parent — the unit ` +
           `'${next.value}' is not allowed in a [height,width] field (write ` +
