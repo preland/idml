@@ -1954,12 +1954,22 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     // to make a card fill a stretched wrapper while its fields still pack at top.
     const mainFit = direction === 'column' ? item.fit?.h : item.fit?.w;
     const mainFill = direction === 'column' ? item.fill?.h : item.fill?.w;
+    // Dropping the size alone is not enough for a `fit` LEAF: it also carries a
+    // `max-*: <declared>%` cap (see the hug cell in convertComponent). Inside a
+    // content-flow parent that cap is self-limiting — the parent shrink-wraps to
+    // its children, so the child is capped at a share of the width it itself
+    // produced, and it can never reach the space the parent actually has. Drop
+    // the cap the parser generated (matched by value, so an authored `maxWidth:`
+    // escape hatch survives) and let the leaf take its natural size.
     if (mainFit || mainFill) {
-      for (const ch of children) {
-        if (!ch.size) continue;
-        if (direction === 'column') delete ch.size.height;
-        else delete ch.size.width;
-      }
+      const sizeKey = direction === 'column' ? 'height' : 'width';
+      const maxKey = direction === 'column' ? 'maxHeight' : 'maxWidth';
+      item.children.forEach((pc, i) => {
+        const ch = children[i];
+        if (ch.size) delete ch.size[sizeKey];
+        const generatedCap = typeof pc[sizeKey] === 'number' ? `${pc[sizeKey]}%` : undefined;
+        if (generatedCap && ch.idmlStyle?.[maxKey] === generatedCap) delete ch.idmlStyle[maxKey];
+      });
     }
     // A `grow` child flex-grows to fill the leftover main-axis space.
     item.children.forEach((pc, i) => { if (pc.hug) applyHug(children[i], direction); });
