@@ -159,6 +159,9 @@
     }
   }
 
+  /** A font-size written in container-query units is pinned to its own box. */
+  const PINNED_UNIT = /\dcq(w|h|i|b|min|max)\b/i;
+
   /**
    * 'freeze' simulates the multiplier by re-emitting every computed font-size,
    * which works on a page that has no scaling feature yet. Once idml actually
@@ -195,6 +198,11 @@
       restoreFonts();
     } else {
       for (const rec of state.fonts) {
+        // Text authored in container-query units has already declared its size
+        // as a fraction of its own box. Multiplying it would contradict that
+        // declaration — the whole point of writing it that way is that the
+        // string keeps one share of its container whatever the user's setting.
+        if (PINNED_UNIT.test(rec.inline)) continue;
         const cap = capFor(rec.el);
         const s = cap === undefined ? scale : Math.min(scale, cap);
         rec.el.style.setProperty('font-size', (rec.px * s).toFixed(3) + 'px', 'important');
