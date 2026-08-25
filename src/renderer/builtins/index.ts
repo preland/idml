@@ -83,6 +83,42 @@ const Input = ({ type = 'text', value, onChange, onEnter, placeholder, name, dis
 const Textarea = ({ value, onChange, placeholder, name, rows, style, ...props }: ComponentProps) =>
   React.createElement('textarea', { value, onChange, placeholder, name, rows, style, ...props });
 
+/**
+ * A document-level keybinding. Renders nothing: `Hotkey("Escape", closeThing)`
+ * declares that a key runs a method, which is otherwise inexpressible — a
+ * handler in the DSL always hangs off an element the user has to reach with the
+ * pointer. `value` is the combination ("Escape", "Ctrl+Enter", "Meta+K"),
+ * matched case-insensitively against the event's key plus its modifiers.
+ */
+const Hotkey = ({ value, onClick }: ComponentProps) => {
+  const handlerRef = React.useRef(onClick);
+  handlerRef.current = onClick;
+  const combo = String(value ?? '');
+  React.useEffect(() => {
+    if (!combo) return;
+    const parts = combo.toLowerCase().split('+').map((s) => s.trim()).filter(Boolean);
+    const key = parts[parts.length - 1];
+    const needCtrl = parts.includes('ctrl');
+    const needShift = parts.includes('shift');
+    const needAlt = parts.includes('alt');
+    const needMeta = parts.includes('meta');
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== key) return;
+      // Ctrl and Meta are interchangeable so one binding covers both platforms.
+      if (needCtrl && !(e.ctrlKey || e.metaKey)) return;
+      if (needMeta && !(e.metaKey || e.ctrlKey)) return;
+      if (needShift !== e.shiftKey) return;
+      if (needAlt !== e.altKey) return;
+      if (!needCtrl && !needMeta && (e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      (handlerRef.current as ((ev: unknown) => void) | undefined)?.(e);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [combo]);
+  return null;
+};
+
 const Option = ({ value, label, children, ...props }: ComponentProps) =>
   React.createElement('option', { value, ...props }, label ?? children);
 
@@ -243,6 +279,7 @@ export const BUILTIN_COMPONENTS = {
   Table,
   Input,
   Textarea,
+  Hotkey,
   Select,
   Option,
   Checkbox,

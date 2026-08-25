@@ -641,3 +641,30 @@ Neg()[100,100,top-left]{}
     expect(node.idmlStyle?.marginTop).toBe('-0.5vw');
   });
 });
+
+describe('handlers — a second handler is the double-click', () => {
+  it('binds handler #1 to the primary action and #2 to onDoubleClick', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Button("Help", showHint, editHint)[100,100,top-left]{}
+}
+`);
+    const btn = cfg.pages[0].components.find((c) => c.type === 'Button');
+    expect(btn?.bindings).toEqual([
+      { prop: 'onClick', methodId: 'showHint' },
+      { prop: 'onDoubleClick', methodId: 'editHint' },
+    ]);
+  });
+
+  it('leaves a single handler on the primary action', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Button("Save", save)[100,100,top-left]{}
+}
+`);
+    const btn = cfg.pages[0].components.find((c) => c.type === 'Button');
+    expect(btn?.bindings).toEqual([{ prop: 'onClick', methodId: 'save' }]);
+  });
+});
