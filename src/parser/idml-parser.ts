@@ -531,7 +531,7 @@ const BUILTIN_NAMES = new Set([
   'Text', 'Heading', 'Button', 'Link', 'Image', 'List', 'Card', 'Divider', 'Spacer',
   'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form', 'Modal', 'Column',
   'Overlay', 'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
-  'Embed',
+  'Embed', 'Hotkey',
 ]);
 
 class IdmlParser {
@@ -1306,7 +1306,9 @@ function containerDirection(
  */
 /** Out-of-flow node types: portals / fixed layers. They don't occupy flow space,
  *  so they neither count toward a parent's tiling sum nor must fill the cross axis. */
-const OUT_OF_FLOW = new Set(['Overlay', 'Modal']);
+// Nodes that occupy no flow space. Overlay/Modal portal away; `Hotkey` renders
+// nothing at all — it is a keybinding, not a box.
+const OUT_OF_FLOW = new Set(['Overlay', 'Modal', 'Hotkey']);
 
 /**
  * A definition is itself out-of-flow when its body renders only out-of-flow
@@ -2140,7 +2142,11 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
     // `~@path` — same two-way model wiring, but `methodId` is a value-ref path whose
     // resolved value is the form-state KEY (see useBoundProps' dynamicKey branch).
     ...dynModelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const, dynamicKey: true })),
-    ...handlerRefs.map(methodId => ({ prop: handlerProp, methodId })),
+    // The first handler is the element's primary action; a SECOND one is its
+    // double-click. That is the only way the DSL can express "single click and
+    // double click do different things" — e.g. a help marker that reveals its
+    // text on hover and opens an editor on double-click.
+    ...handlerRefs.map((methodId, i) => ({ prop: i === 0 ? handlerProp : 'onDoubleClick', methodId })),
     // Dynamic classes (`@method` tokens in a class block) resolve to strings that
     // are appended to className per render.
     ...(item.classRefs ?? []).map(methodId => ({ prop: 'className', methodId, kind: 'value' as const })),
@@ -2222,6 +2228,16 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
         type: item.name,
         props: first != null ? { placeholder: String(first) } : {},
         idmlStyle,
+      });
+
+    // A keybinding: arg0 is the combination, and it is the whole of the node —
+    // name it `value` so the builtin reads it the same way whether it is a
+    // literal ("Escape") or a `@method` ref.
+    case 'Hotkey':
+      return withBindings({
+        id,
+        type: item.name,
+        props: first != null ? { value: String(first) } : {},
       });
 
     default:
