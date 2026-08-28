@@ -27,8 +27,26 @@ const BUTTON_BASE: React.CSSProperties = {
   fontSize: 'inherit',
 };
 
+// BUTTON_BASE's `border: none` leaves every border longhand at its initial
+// value, so an author's `borderWidth` lands on a button whose border-style is
+// still `none` and computes to 0 — the width is silently dead. Restore the
+// style whenever a width was asked for, so `borderWidth: 0.07vw` in a variant
+// draws the border the author wrote.
+const BORDER_WIDTH_PROPS = [
+  'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+] as const;
+
 const Button = ({ text, children, onClick, href, style, type = 'button', ...props }: ComponentProps) => {
-  const merged = { ...BUTTON_BASE, ...style };
+  const s = style as React.CSSProperties | undefined;
+  const wantsBorder = !!s && BORDER_WIDTH_PROPS.some((k) => s[k] != null);
+  // When the author asked for a border, drop the `border: none` reset rather
+  // than layering a style on top of it: the reset is a shorthand, so keeping it
+  // would also write an inline border-COLOR, and an inline colour beats the
+  // utility class (`border-blue-600`, `border-transparent`) meant to supply it.
+  const { border: _reset, ...borderless } = BUTTON_BASE;
+  const merged = wantsBorder
+    ? { ...borderless, borderStyle: 'solid', ...style }
+    : { ...BUTTON_BASE, ...style };
   // Render both the label and any slotted children (e.g. an icon placed inside
   // the button via `Button("Save", { Image(...) })`).
   const content = [text, children];

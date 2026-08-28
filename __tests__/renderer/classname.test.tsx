@@ -39,3 +39,39 @@ Text("hi")[100,100,top-left]{}
     expect(row).toHaveClass('flex', 'bg-gray-100', 'border-b');
   });
 });
+
+describe('a Button borderWidth actually draws', () => {
+  it('restores border-style when a variant declares a width', () => {
+    const cfg = parseIdml(`
+Ringed:Button \`text-gray-500\` { borderWidth: 0.07vw }
+./p
+Col()[100,100,top-left] {
+Ringed("?", noop)[100,100,center]{}
+}
+`);
+    render(
+      <ConfigProvider config={cfg} methods={[{ id: 'noop', fn: () => {} }]}>
+        <ConfigRenderer page="/p" />
+      </ConfigProvider>
+    );
+    const btn = screen.getByText('?').closest('button')!;
+    expect(btn.style.borderStyle).toBe('solid');
+    expect(btn.style.borderWidth).toBe('0.07vw');
+  });
+
+  it('leaves a plain button borderless', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Button("Go", noop)[100,100,center]{}
+}
+`);
+    render(
+      <ConfigProvider config={cfg} methods={[{ id: 'noop', fn: () => {} }]}>
+        <ConfigRenderer page="/p" />
+      </ConfigProvider>
+    );
+    const btn = screen.getByText('Go').closest('button')!;
+    expect(btn.style.borderStyle).not.toBe('solid');
+  });
+});
