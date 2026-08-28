@@ -39,8 +39,12 @@ export function ComponentRenderer({
   // Block-like components fill their cell; text/heading stay natural height so
   // the parent flex container can centre them vertically.
   const FILL_HEIGHT = new Set(['Button', 'Image', 'Card', 'Divider', 'Spacer', 'Embed']);
+  // A checkbox or radio is a fixed square the browser (or a stylesheet) sizes;
+  // stretching it to the cell's width turns it into a rectangle. Its cell still
+  // reserves the declared `[h,w]` — the control just sits at its own size inside.
+  const INTRINSIC_WIDTH = new Set(['Checkbox', 'Radio']);
   const tokenStyle = {
-    width: '100%',
+    ...(INTRINSIC_WIDTH.has(component.type) ? {} : { width: '100%' }),
     ...(FILL_HEIGHT.has(component.type) ? { height: '100%' } : {}),
     boxSizing: 'border-box' as const,
     ...resolveTokenProps(component.tokenProps, config.tokens),
