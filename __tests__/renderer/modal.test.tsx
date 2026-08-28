@@ -47,3 +47,30 @@ describe('Modal', () => {
     expect(screen.queryByText('Create User')).toBeNull();
   });
 });
+
+describe('a Modal is sized by its own dims, not its cell', () => {
+  it('puts the [h,w] percentages on the portalled panel', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Modal(@state.open)[60,40,center]{}
+}
+`);
+    const modal = cfg.pages[0].components.find((c) => c.type === 'Modal');
+    expect(modal?.idmlStyle?.height).toBe('60%');
+    expect(modal?.idmlStyle?.width).toBe('40%');
+  });
+
+  it('lets an explicit style-block width win over the dim', () => {
+    const cfg = parseIdml(`
+Narrow:Modal { width: 20vw }
+./p
+Col()[100,100,top-left] {
+Narrow(@state.open)[60,40,center]{}
+}
+`);
+    const modal = cfg.pages[0].components.find((c) => c.type === 'Modal');
+    expect(modal?.idmlStyle?.width).toBe('20vw');
+    expect(modal?.idmlStyle?.height).toBe('60%');
+  });
+});

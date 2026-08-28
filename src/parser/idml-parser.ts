@@ -2188,7 +2188,19 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   // fit styles win over anchor defaults and variant styles so the component
   // actually shrinks to content (overriding the renderer's default fill).
   const fit = item.fit ? fitStyles(item.fit) : {};
-  const merged = { ...anchorStyle, ...item.style, ...fit };
+  // A Modal portals its panel out of the cell the layout built for it, so that
+  // cell's `[h,w]` would size a box nobody ever sees and the panel would be left
+  // at whatever its class/style block said. Put the dims on the panel itself —
+  // it sits in a viewport-sized backdrop, so they read as percentages of the
+  // viewport. An explicit width/height in the style block still wins.
+  const modalSize: Record<string, string> =
+    item.name === 'Modal'
+      ? {
+          ...(typeof item.height === 'number' ? { height: `${item.height}%` } : {}),
+          ...(typeof item.width === 'number' ? { width: `${item.width}%` } : {}),
+        }
+      : {};
+  const merged = { ...anchorStyle, ...modalSize, ...item.style, ...fit };
   const idmlStyle = Object.keys(merged).length ? merged : undefined;
 
   // Classify call args. `@x` -> reactive value binding; a bare identifier -> a
