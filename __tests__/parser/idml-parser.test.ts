@@ -668,3 +668,22 @@ Button("Save", save)[100,100,top-left]{}
     expect(btn?.bindings).toEqual([{ prop: 'onClick', methodId: 'save' }]);
   });
 });
+
+describe('percentages in a style block', () => {
+  it('accepts a % value', () => {
+    const node = parseIdml(`
+Wide:Row { minWidth: 100% maxWidth: 50% }
+./home
+Wide()[100,100,top-left]{}
+`).pages[0].layout.children[0];
+    expect(node.idmlStyle?.minWidth).toBe('100%');
+    expect(node.idmlStyle?.maxWidth).toBe('50%');
+  });
+
+  it('still rejects a % in a [height,width] field', () => {
+    expect(() => parseIdml(`
+./home
+Col()[100%,100,top-left]{}
+`)).toThrow();
+  });
+});

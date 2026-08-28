@@ -118,6 +118,7 @@ type TokenType =
   | 'ROUTE'
   | 'IDENT'
   | 'NUMBER'
+  | 'PERCENT'
   | 'STRING'
   | 'COLOR'
   | 'COLON'
@@ -217,6 +218,7 @@ const SINGLE_CHAR_TOKENS: Record<string, TokenType> = {
   ':': 'COLON',
   '?': 'QUESTION',
   '!': 'BANG',
+  '%': 'PERCENT',
 };
 
 // Hard maximum line width. Lines longer than this are a parse error: long lines
@@ -893,6 +895,13 @@ class IdmlParser {
       if (next?.type === 'IDENT' && STYLE_UNITS.has(next.value as string)) {
         this.pos++;
         return `${n}${next.value}`;
+      }
+      // A percentage is relative to the element's own container, so unlike `vw`
+      // it says nothing about the viewport — it is how a style block asks for
+      // "all of the space I am given" (e.g. minWidth: 100%).
+      if (next?.type === 'PERCENT') {
+        this.pos++;
+        return `${n}%`;
       }
       return String(n);
     }
