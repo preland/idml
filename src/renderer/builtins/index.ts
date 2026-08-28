@@ -119,6 +119,131 @@ const Hotkey = ({ value, onClick }: ComponentProps) => {
   return null;
 };
 
+/**
+ * A continuous pointer gesture on the container it sits in. Renders nothing and
+ * takes no layout space — like `Hotkey`, it declares that an interaction runs a
+ * method, which the DSL otherwise cannot say: a handler in idml fires on click,
+ * and a drag or a wheel has no element to hang off.
+ *
+ * `Gesture("pan", onPan)` binds dragging, `"zoom"` the wheel, `"brush"` a
+ * drag that reports the span it covered. A modifier may be required for the
+ * wheel — `"zoom:ctrl"` leaves an unmodified wheel to scroll the page as usual.
+ * Several Gestures may sit in one container; each listens for its own event, so
+ * pan and zoom coexist without fighting over a layer.
+ *
+ * The handler receives the reading as its `event`, alongside the values and
+ * helpers every idml handler gets. Distances are reported BOTH in pixels and as
+ * a fraction of the container, because a caller almost always wants the
+ * fraction: on a timeline, `dxRatio` is the share of the visible span that was
+ * dragged, whatever the element's width happens to be.
+ */
+const GESTURE_MODIFIERS: Record<string, (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }) => boolean> = {
+  ctrl: (e) => e.ctrlKey || e.metaKey,
+  meta: (e) => e.metaKey || e.ctrlKey,
+  shift: (e) => e.shiftKey,
+  alt: (e) => e.altKey,
+};
+
+const Gesture = ({ value, onClick }: ComponentProps) => {
+  const markerRef = React.useRef<HTMLSpanElement | null>(null);
+  const handlerRef = React.useRef(onClick);
+  handlerRef.current = onClick;
+  const spec = String(value ?? 'pan');
+
+  React.useEffect(() => {
+    const [kindRaw, modRaw] = spec.toLowerCase().split(':');
+    const kind = kindRaw.trim();
+    const needMod = GESTURE_MODIFIERS[(modRaw ?? '').trim()];
+    // The cell idml builds for an out-of-flow node is `display: contents`, so it
+    // has no box to measure; step past those to the first ancestor that does.
+    // That container is what the gesture reads its distances against.
+    let host: HTMLElement | null = markerRef.current?.parentElement ?? null;
+    while (host && getComputedStyle(host).display === 'contents') host = host.parentElement;
+    if (!host) return;
+
+    const fire = (payload: Record<string, unknown>) =>
+      (handlerRef.current as ((ev: unknown) => void) | undefined)?.(payload);
+    const box = () => host!.getBoundingClientRect();
+    const cleanups: (() => void)[] = [];
+
+    if (kind === 'zoom') {
+      const onWheel = (e: WheelEvent) => {
+        if (needMod && !needMod(e)) return;
+        e.preventDefault();
+        const r = box();
+        fire({
+          gesture: 'zoom',
+          // >1 zooms in, <1 zooms out; the caller multiplies its span by it.
+          scale: e.deltaY < 0 ? 1 / 1.15 : 1.15,
+          deltaY: e.deltaY,
+          atRatio: r.width ? (e.clientX - r.left) / r.width : 0.5,
+          width: r.width,
+          height: r.height,
+        });
+      };
+      host.addEventListener('wheel', onWheel, { passive: false });
+      cleanups.push(() => host!.removeEventListener('wheel', onWheel));
+    }
+
+    if (kind === 'pan' || kind === 'brush') {
+      let origin: { x: number; y: number; r: DOMRect } | null = null;
+      let last = { x: 0, y: 0 };
+      const report = (e: PointerEvent, phase: string) => {
+        if (!origin) return;
+        const { r } = origin;
+        const from = kind === 'pan' ? last : { x: origin.x, y: origin.y };
+        const dx = e.clientX - from.x;
+        const dy = e.clientY - from.y;
+        fire({
+          gesture: kind,
+          phase,
+          dx,
+          dy,
+          dxRatio: r.width ? dx / r.width : 0,
+          dyRatio: r.height ? dy / r.height : 0,
+          fromRatio: r.width ? (origin.x - r.left) / r.width : 0,
+          toRatio: r.width ? (e.clientX - r.left) / r.width : 0,
+          width: r.width,
+          height: r.height,
+        });
+        last = { x: e.clientX, y: e.clientY };
+      };
+      const onDown = (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        if (needMod && !needMod(e)) return;
+        origin = { x: e.clientX, y: e.clientY, r: box() };
+        last = { x: e.clientX, y: e.clientY };
+        host!.setPointerCapture(e.pointerId);
+        fire({ gesture: kind, phase: 'start', dx: 0, dy: 0, dxRatio: 0, dyRatio: 0,
+               fromRatio: origin.r.width ? (e.clientX - origin.r.left) / origin.r.width : 0,
+               toRatio: origin.r.width ? (e.clientX - origin.r.left) / origin.r.width : 0,
+               width: origin.r.width, height: origin.r.height });
+      };
+      const onMove = (e: PointerEvent) => { if (origin) report(e, 'move'); };
+      const onUp = (e: PointerEvent) => {
+        if (!origin) return;
+        report(e, 'end');
+        try { host!.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+        origin = null;
+      };
+      host.addEventListener('pointerdown', onDown);
+      host.addEventListener('pointermove', onMove);
+      host.addEventListener('pointerup', onUp);
+      host.addEventListener('pointercancel', onUp);
+      cleanups.push(() => {
+        host!.removeEventListener('pointerdown', onDown);
+        host!.removeEventListener('pointermove', onMove);
+        host!.removeEventListener('pointerup', onUp);
+        host!.removeEventListener('pointercancel', onUp);
+      });
+    }
+
+    return () => cleanups.forEach((fn) => fn());
+  }, [spec]);
+
+  return React.createElement('span', { ref: markerRef, 'data-idml-gesture': spec, style: { display: 'none' } });
+};
+
 const Option = ({ value, label, children, ...props }: ComponentProps) =>
   React.createElement('option', { value, ...props }, label ?? children);
 
@@ -290,4 +415,5 @@ export const BUILTIN_COMPONENTS = {
   Form,
   Modal,
   Embed,
+  Gesture,
 };

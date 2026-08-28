@@ -546,7 +546,7 @@ const BUILTIN_NAMES = new Set([
   'Text', 'Heading', 'Button', 'Link', 'Image', 'List', 'Card', 'Divider', 'Spacer',
   'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form', 'Modal', 'Column',
   'Overlay', 'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
-  'Embed', 'Hotkey',
+  'Embed', 'Hotkey', 'Gesture',
 ]);
 
 class IdmlParser {
@@ -1394,7 +1394,7 @@ function containerDirection(
  *  so they neither count toward a parent's tiling sum nor must fill the cross axis. */
 // Nodes that occupy no flow space. Overlay/Modal portal away; `Hotkey` renders
 // nothing at all — it is a keybinding, not a box.
-const OUT_OF_FLOW = new Set(['Overlay', 'Modal', 'Hotkey']);
+const OUT_OF_FLOW = new Set(['Overlay', 'Modal', 'Hotkey', 'Gesture']);
 
 /**
  * A definition is itself out-of-flow when its body renders only out-of-flow
@@ -2323,6 +2323,7 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
     // name it `value` so the builtin reads it the same way whether it is a
     // literal ("Escape") or a `@method` ref.
     case 'Hotkey':
+    case 'Gesture':
       return withBindings({
         id,
         type: item.name,
