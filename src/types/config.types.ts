@@ -18,5 +18,7 @@ export interface UIConfig {
   tokens: TokensDef;
   pages: PageDef[];
   darkStyles?: DarkRule[];
+  /** `vars { }` tokens, emitted as one document-level `:root` rule. */
+  rootVars?: Record<string, string>;
   userComponents?: string[];
 }

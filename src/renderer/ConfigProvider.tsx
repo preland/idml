@@ -28,6 +28,18 @@ const CELL_EXPAND_CSS = `
 .idml-cell:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
 `;
 
+/** Compile the DSL `vars { }` tokens into one document-level `:root` rule. It is
+ *  a real stylesheet rather than inline vars on the page wrapper because a Modal
+ *  portals its panel to <body> — outside that wrapper — and would otherwise
+ *  inherit none of them. */
+function buildRootVarsCss(vars?: Record<string, string>): string {
+  if (!vars || Object.keys(vars).length === 0) return '';
+  const body = Object.entries(vars)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('; ');
+  return `:root { ${body} }`;
+}
+
 function buildDarkCss(rules?: DarkRule[]): string {
   if (!rules || rules.length === 0) return '';
   const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
@@ -247,10 +259,12 @@ export function ConfigProvider({
 
   const tokenVars = injectTokenVars(validConfig.tokens, darkMode);
   const darkCss = buildDarkCss(validConfig.darkStyles);
+  const rootVarsCss = buildRootVarsCss(validConfig.rootVars);
 
   return (
     <ConfigContext.Provider value={{ config: validConfig, darkMode, setDarkMode, tokenVars, debug, editorMode }}>
       <div style={tokenVars as React.CSSProperties}>
+        {rootVarsCss ? <style dangerouslySetInnerHTML={{ __html: rootVarsCss }} /> : null}
         <style dangerouslySetInnerHTML={{ __html: CELL_EXPAND_CSS }} />
         {darkCss ? <style dangerouslySetInnerHTML={{ __html: darkCss }} /> : null}
         {children}

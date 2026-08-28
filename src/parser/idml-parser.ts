@@ -383,10 +383,15 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Identifier — hyphenated keywords like `top-left`, and CSS values that begin
-    // with a hyphen such as vendor prefixes (`-webkit-box`, `-webkit-fill-available`).
-    // A leading `-` is only an identifier when a letter/underscore follows.
-    if (/[a-zA-Z_]/.test(stripped[i]) || (stripped[i] === '-' && /[a-zA-Z_]/.test(stripped[i + 1] ?? ''))) {
+    // Identifier — hyphenated keywords like `top-left`, CSS values that begin
+    // with a hyphen such as vendor prefixes (`-webkit-box`), and CSS custom
+    // property names (`--idml-radius`). A leading `-` is only an identifier when
+    // a letter/underscore follows it, or when it opens a `--` custom property.
+    if (
+      /[a-zA-Z_]/.test(stripped[i]) ||
+      (stripped[i] === '-' && /[a-zA-Z_]/.test(stripped[i + 1] ?? '')) ||
+      (stripped[i] === '-' && stripped[i + 1] === '-' && /[a-zA-Z_]/.test(stripped[i + 2] ?? ''))
+    ) {
       let j = i;
       while (j < stripped.length && /[\w-]/.test(stripped[j])) j++;
       tokens.push({ type: 'IDENT', value: stripped.slice(i, j), start: i, end: j });
@@ -558,6 +563,10 @@ class IdmlParser {
   // Dark-mode overrides from `dark { ... }` blocks (shared across imports, so a
   // block in styles.idml reaches every page that imports it). See parseDarkBlock.
   darkStyles: DarkRule[] = [];
+  /** `vars { }` declarations, emitted as one `:root` rule. Document-level (not
+   *  scoped to the page tree) so a portalled Modal sees them too. Shared with
+   *  imported files, like darkStyles. */
+  rootVars: Record<string, string> = {};
 
   constructor(tokens: Token[], fileName = '<entry>', trackSource = false) {
     this.tokens = tokens;
@@ -690,6 +699,7 @@ class IdmlParser {
     sub.defRegistry = this.defRegistry;
     sub.defParamRegistry = this.defParamRegistry;
     sub.darkStyles = this.darkStyles; // dark {} blocks propagate to importers
+    sub.rootVars = this.rootVars; // as do vars {} blocks
     sub.parseImports(resolve); // transitive imports
     sub.parseTopDecls();
 
@@ -717,6 +727,10 @@ class IdmlParser {
         this.parseDarkBlock();
         continue;
       }
+      if (t?.type === 'IDENT' && t.value === 'vars' && this.peek(1)?.type === 'LBRACE') {
+        this.parseVarsBlock();
+        continue;
+      }
       if (
         t?.type === 'IDENT' &&
         this.peek(1)?.type === 'COLON' &&
@@ -726,6 +740,25 @@ class IdmlParser {
         continue;
       }
       break;
+    }
+  }
+
+  // Consume `vars { --name: value ... }` — the CSS custom properties the whole
+  // UI is tuned by (one rounding amount, one hairline width, one control size).
+  // They live here rather than in a stylesheet so the values a designer changes
+  // sit beside the variants that spend them. Keys must be custom properties: a
+  // plain CSS prop here would have no element to apply to.
+  private parseVarsBlock(): void {
+    this.pos++; // consume 'vars'
+    const style = this.parseStyleDefBody();
+    for (const [k, v] of Object.entries(style)) {
+      if (!k.startsWith('--')) {
+        throw new Error(
+          `[idml] vars: '${k}' is not a CSS custom property — a vars block ` +
+            `declares '--name: value' tokens, not styles for an element`
+        );
+      }
+      this.rootVars[k] = v;
     }
   }
 
@@ -2405,6 +2438,7 @@ function parseIdmlCore(
 
   const config: UIConfig = { version: '1', tokens: DEFAULT_TOKENS, pages };
   if (parser.darkStyles.length > 0) config.darkStyles = parser.darkStyles;
+  if (Object.keys(parser.rootVars).length > 0) config.rootVars = parser.rootVars;
 
   // Variant table with usage counts (source-tracking only) — how many rendered
   // components use each styled variant, so the editor can say "used by N areas"
