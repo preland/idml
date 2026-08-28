@@ -3,10 +3,7 @@
 All notable changes to `idml-ui` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) (pre-1.0: breaking changes bump the minor).
 
-## Unreleased
-
-Everything below is on `master` but **not yet published to npm** — the registry
-still serves 0.3.0. A release needs a version bump and `npm publish`.
+## 0.4.0
 
 ### Added
 
