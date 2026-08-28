@@ -12,8 +12,16 @@ import type { PercentageString, DynamicSize, DynamicDim } from '../types/layout.
 type DimRef = { ref: string; whenTrue?: string; whenFalse?: string };
 // `'auto'` is internal-only (table expansion uses it for content-height); the
 // parser rejects it as user input. `@ref` dims come from `parseDimension`.
-type DimValue = number | 'auto' | DimRef;
+// A bare parameter name in a `define` body's `[h,w]` field, bound to the number
+// the call site passed in that position. Lets one definition be sized by its
+// caller — e.g. a shared popup frame each page opens at its own dimensions.
+// Substituted away when the definition is expanded, so nothing downstream of
+// substituteParams ever sees one.
+type DimParam = { param: string };
+type DimValue = number | 'auto' | DimRef | DimParam;
 const isDimRef = (d: DimValue): d is DimRef => typeof d === 'object' && d !== null && 'ref' in d;
+const isDimParam = (d: DimValue): d is DimParam =>
+  typeof d === 'object' && d !== null && 'param' in d;
 
 /**
  * Content-sizing ("fit") flags. An element still declares its `[h,w]` percentage
@@ -812,6 +820,22 @@ class IdmlParser {
     this.inDefineBody = prevInDefine;
     this.consume('RBRACE');
 
+    const known = new Set(params);
+    const checkDims = (items: ParsedItem[]): void => {
+      for (const it of items) {
+        for (const [axis, dim] of [['height', it.height], ['width', it.width]] as const) {
+          if (isDimParam(dim) && !known.has(dim.param)) {
+            throw new Error(
+              `[idml] define ${name}: ${it.name}'s ${axis} names '${dim.param}', ` +
+                `which is not one of its parameters (${params.join(', ') || 'none'})`
+            );
+          }
+        }
+        checkDims(it.children);
+      }
+    };
+    checkDims(body);
+
     this.defRegistry.set(name, body);
     this.defParamRegistry.set(name, params);
   }
@@ -1101,6 +1125,12 @@ class IdmlParser {
       }
       return { ref };
     }
+    // A bare identifier inside a `define` body names one of its parameters; the
+    // call site supplies the number. Outside a definition there is nothing to
+    // bind it to, so it stays an error there.
+    if (this.inDefineBody && this.peek()?.type === 'IDENT') {
+      return { param: this.consume('IDENT').value as string };
+    }
     return this.consume('NUMBER').value as number;
   }
 
@@ -1314,8 +1344,22 @@ function substituteParams(item: ParsedItem, bindings: Map<string, IdmlArg>): Par
     }
     return a;
   };
+  const subDim = (d: DimValue, axis: string): DimValue => {
+    if (!isDimParam(d)) return d;
+    if (!bindings.has(d.param)) return d;
+    const bound = bindings.get(d.param);
+    if (typeof bound !== 'number') {
+      throw new Error(
+        `[idml] ${item.name}: the ${axis} parameter '${d.param}' was given ` +
+          `'${String(bound)}' — a [height,width] field takes a percentage number`
+      );
+    }
+    return bound;
+  };
   return {
     ...item,
+    height: subDim(item.height, 'height'),
+    width: subDim(item.width, 'width'),
     args: item.args.map(subArg),
     children: item.children.map(c => substituteParams(c, bindings)),
   };
@@ -1407,9 +1451,11 @@ function validateTiling(
 
   // Cross axis: every child fills it (100%), unless it `fill`s (stretch to the
   // line), `fit`s the cross axis (natural size within its declared max), or the
-  // dim is a runtime `@ref` (author-guaranteed).
+  // dim is a runtime `@ref` / a `define` parameter — neither is known here, so
+  // both are author-guaranteed.
   for (const c of children) {
-    if (!c.fill?.[crossKey] && !c.fit?.[crossKey] && !isDimRef(c[cross]) && (c[cross] as number) !== 100) {
+    if (!c.fill?.[crossKey] && !c.fit?.[crossKey] && !isDimRef(c[cross]) &&
+        !isDimParam(c[cross]) && (c[cross] as number) !== 100) {
       throw new Error(
         `[idml] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
           `(got ${c[cross]}); no vacant space is allowed`
@@ -1417,9 +1463,10 @@ function validateTiling(
     }
   }
 
-  // A runtime `@ref` main dim can't be summed statically — trust the author to
-  // tile at runtime (e.g. sidebar + content widths that swap on collapse).
-  if (children.some((c) => isDimRef(c[main]))) return;
+  // A runtime `@ref` main dim (or one a call site supplies) can't be summed
+  // statically — trust the author to tile at runtime (e.g. sidebar + content
+  // widths that swap on collapse).
+  if (children.some((c) => isDimRef(c[main]) || isDimParam(c[main]))) return;
 
   // Main axis — the exact-fill invariant. Every child either RESERVES a fixed
   // main-% (a plain dim, or a `fit` whose % is its capped max — it draws smaller
