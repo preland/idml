@@ -29,7 +29,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "idml": "./dist/cli.cjs"
+    "idml": "dist/cli.cjs"
   },
   "files": [
     "dist",
