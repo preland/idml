@@ -35,6 +35,12 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
   };
   const dynW = layout.dynamicSize?.width ? resolveDyn(layout.dynamicSize.width) : undefined;
   const dynH = layout.dynamicSize?.height ? resolveDyn(layout.dynamicSize.height) : undefined;
+  // A `live` dim (`@ref!`) is a continuously-changing quantity — the page
+  // recomputes it every frame — so it is applied as the plain inline size and
+  // never animated: easing into each new value would leave the element trailing
+  // its true position and stack up one 300ms animation per frame.
+  const liveW = layout.dynamicSize?.width?.live === true;
+  const liveH = layout.dynamicSize?.height?.live === true;
   const elRef = React.useRef<HTMLDivElement>(null);
   const prevDimsRef = React.useRef<{ w?: string; h?: string }>({ w: dynW, h: dynH });
   React.useLayoutEffect(() => {
@@ -45,10 +51,10 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
       // flex item's width/flex-basis are unreliable (the new value often doesn't
       // apply mid-flex-layout, leaving it stuck); WAA sets the interpolated size
       // each frame, which the flex layout honours — a smooth slide.
-      if (dynW !== undefined && prev.w !== undefined && prev.w !== dynW) {
+      if (!liveW && dynW !== undefined && prev.w !== undefined && prev.w !== dynW) {
         el.animate([{ width: prev.w }, { width: dynW }], DIM_ANIM);
       }
-      if (dynH !== undefined && prev.h !== undefined && prev.h !== dynH) {
+      if (!liveH && dynH !== undefined && prev.h !== undefined && prev.h !== dynH) {
         el.animate([{ height: prev.h }, { height: dynH }], DIM_ANIM);
       }
     }
@@ -59,7 +65,9 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
     // packs by content and can overflow at runtime — surface that here.
     // (Vertical only — horizontal `overflow:hidden` is the intentional hug/
     // ellipsis clip, e.g. the launcher's collapsed label.)
-    if (process.env.NODE_ENV !== 'production' && el) {
+    // Skipped for live dims: this effect then runs every frame, and reading
+    // scrollHeight forces a synchronous layout — a per-frame reflow storm.
+    if (process.env.NODE_ENV !== 'production' && el && !liveW && !liveH) {
       const cs = getComputedStyle(el);
       if (cs.overflowY === 'hidden' && el.scrollHeight - el.clientHeight > 1) {
         console.error(
@@ -86,10 +94,13 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
     // Debug aid (opt-in): show bounding boxes for structural Row/Col containers
     // (not component-bound leaf cells). Off by default so pages render cleanly.
     ...(debug && !layout.componentId ? { outline: '1px solid rgba(100,100,100,0.35)' } : {}),
+    // Prevent flex children from shrinking so percentage/vh heights are
+    // respected and scroll works. Declared BEFORE idmlStyle so a cell that sets
+    // its own flex (a `hug` child is flex: 1 1 0) keeps it — otherwise the hug
+    // could not shrink below its content and would push its siblings out.
+    flexShrink: 0,
     // Apply .idml inline styles (can override sizeStyle values, e.g. height: '30vh' for scroll pages)
     ...(layout.idmlStyle ?? {}),
-    // Prevent flex children from shrinking so percentage/vh heights are respected and scroll works
-    flexShrink: 0,
   };
 
   let containerClass = '';

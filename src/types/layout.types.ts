@@ -63,7 +63,7 @@ export interface ConditionalClass {
 
 /** Reactive width/height resolved per render (applied AFTER static `size`, so it
  *  wins — letting a cell resize on state, e.g. a collapsing sidebar). The change
- *  is animated by the renderer (Web Animations API). */
+ *  is animated by the renderer (Web Animations API) unless the dim is `live`. */
 export interface DynamicSize {
   width?: DynamicDim;
   height?: DynamicDim;
@@ -77,6 +77,15 @@ export interface DynamicDim {
   ref: string;
   whenTrue?: string;
   whenFalse?: string;
+  /**
+   * Apply each new value IMMEDIATELY instead of easing into it. A normal dynamic
+   * dim is a UI transition (a sidebar collapsing), so the renderer animates the
+   * change over ~300ms. A `live` dim is a *continuously* changing quantity — a
+   * value the page recomputes every frame, e.g. an animated object's position —
+   * where easing would smear the motion and pile up overlapping animations. Set
+   * by the `@ref!` dim syntax.
+   */
+  live?: boolean;
 }
 
 export interface GridDef {
