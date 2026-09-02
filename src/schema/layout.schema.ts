@@ -29,6 +29,7 @@ const DynamicDimSchema = z
     ref: z.string(),
     whenTrue: z.string().optional(),
     whenFalse: z.string().optional(),
+    live: z.boolean().optional(),
   })
   .strict();
 
