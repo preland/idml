@@ -90,3 +90,24 @@ describe('idml parser — Link component', () => {
     expect(comp.bindings).toEqual([{ prop: 'href', methodId: 'item.route', kind: 'value' }]);
   });
 });
+
+// A `hug` child of a definition body must fill the leftover height, exactly as
+// it does inside a Col. Before this, the def branch never applied hug: the
+// child kept its declared [h,w] and the body overflowed the wrapper.
+describe('idml parser — hug inside a define body', () => {
+  it('gives a hug child of a define body flex:1 and drops its static height', () => {
+    const config = parseIdml(`
+./home
+define Stack() {
+Col()[30,100,top-left]{}
+Col()[100,100,top-left,hug]{}
+}
+Stack()[100,100,top-left]{}
+`);
+    const wrapper = config.pages[0].layout.children[0];
+    const [fixed, filler] = wrapper.children;
+    expect(fixed.size?.height).toBe('30%');
+    expect(filler.size?.height).toBeUndefined();
+    expect(filler.idmlStyle).toMatchObject({ flexGrow: '1', flexBasis: '0' });
+  });
+});

@@ -41,6 +41,20 @@ Col()[100,86.5,top-left]{}
     ).not.toThrow();
   });
 
+  it('marks a `@ref!` dim live so the renderer applies it without easing', () => {
+    const config = parseIdml(`
+./home
+Col()[100,100,top-left] {
+Col()[@birdTop!,100,top-left]{}
+Col()[@birdRest,100,top-left]{}
+}
+`);
+    const col = config.pages[0].layout.children[0];
+    expect(child(col, 0).dynamicSize).toEqual({ height: { ref: 'birdTop', live: true } });
+    // The default stays a transition — `live` is opt-in per dim.
+    expect(child(col, 1).dynamicSize).toEqual({ height: { ref: 'birdRest' } });
+  });
+
   it('supports a @state path as a dimension ref', () => {
     const config = parseIdml(`
 ./home

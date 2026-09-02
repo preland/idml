@@ -9,7 +9,7 @@ import type { PercentageString, DynamicSize, DynamicDim } from '../types/layout.
 // narrows when collapsed. A `@ref ? A : B` form picks A/B from the ref's
 // truthiness so the two sizes (the visual values) live in the .idml, not in a
 // method. (`'auto'` is gone; see parseDimension.)
-type DimRef = { ref: string; whenTrue?: string; whenFalse?: string };
+type DimRef = { ref: string; whenTrue?: string; whenFalse?: string; live?: boolean };
 // `'auto'` is internal-only (table expansion uses it for content-height); the
 // parser rejects it as user input. `@ref` dims come from `parseDimension`.
 // A bare parameter name in a `define` body's `[h,w]` field, bound to the number
@@ -1114,8 +1114,16 @@ class IdmlParser {
     // `@ref` dimension — resolved per render to a percentage (reactive sizing).
     // `@ref ? A : B` resolves to A when the ref is truthy, else B (the two sizes
     // declared inline, e.g. `@state.collapsed ? 3.4vw : 13.5vw`).
+    // A trailing `!` (`@ref!`) marks the dim LIVE: the renderer applies each new
+    // value at once instead of easing into it. Use it for a quantity that changes
+    // continuously (per-frame animation), where the default transition would lag
+    // the motion behind its true value; leave it off for state transitions.
     if (this.peek()?.type === 'VALUE_REF') {
       const ref = this.consume('VALUE_REF').value as string;
+      if (this.peek()?.type === 'BANG') {
+        this.consume('BANG');
+        return { ref, live: true };
+      }
       if (this.peek()?.type === 'QUESTION') {
         this.consume('QUESTION');
         const whenTrue = this.parseDimLiteral();
@@ -1658,9 +1666,11 @@ function dynSizeOf(item: ParsedItem): DynamicSize | undefined {
 }
 
 function dimRefToDynamic(d: DimRef): DynamicDim {
-  return d.whenTrue !== undefined
-    ? { ref: d.ref, whenTrue: d.whenTrue, whenFalse: d.whenFalse }
-    : { ref: d.ref };
+  const dyn: DynamicDim =
+    d.whenTrue !== undefined
+      ? { ref: d.ref, whenTrue: d.whenTrue, whenFalse: d.whenFalse }
+      : { ref: d.ref };
+  return d.live ? { ...dyn, live: true } : dyn;
 }
 
 /**
@@ -1958,6 +1968,10 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     if (item.fill) Object.assign(defHug, fillStyles(item.fill));
     const defStyle = item.fit || item.fill ? { ...(cellStyle ?? {}), ...defHug } : cellStyle;
     const bodyChildren = body.map(t => convertItem(t, innerCtx));
+    // A definition's body flows in a column, so a `hug` child of it fills the
+    // leftover height exactly as it would inside a Col — without this, its
+    // declared `[h,w]` stood and the body overflowed the wrapper.
+    body.forEach((pc, i) => { if (pc.hug) applyHug(bodyChildren[i], 'column'); });
     // A hug-h def call content-sizes its wrapper (column main axis), so — like a
     // hug-h container — its body children must PACK by content: drop their
     // main-axis height, or two full-height sections (e.g. a nav block + footer)
