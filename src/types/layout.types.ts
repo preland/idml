@@ -43,6 +43,9 @@ export interface FlexDef {
   condClasses?: ConditionalClass[];
   visibility?: LayoutVisibility;
   dynamicSize?: DynamicSize;
+  /** Makes the cell focusable so a click can expand it (see the table cell
+   *  expansion rule in ConfigProvider). Set by the parser, not authorable. */
+  tabIndex?: number;
 }
 
 /** Reactive show/hide for a layout cell: render only when `ref` resolves truthy
@@ -107,6 +110,9 @@ export interface GridDef {
   condClasses?: ConditionalClass[];
   visibility?: LayoutVisibility;
   dynamicSize?: DynamicSize;
+  /** Makes the cell focusable so a click can expand it (see the table cell
+   *  expansion rule in ConfigProvider). Set by the parser, not authorable. */
+  tabIndex?: number;
 }
 
 export type LayoutDef = FlexDef | GridDef;

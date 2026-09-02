@@ -94,10 +94,7 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
     // Debug aid (opt-in): show bounding boxes for structural Row/Col containers
     // (not component-bound leaf cells). Off by default so pages render cleanly.
     ...(debug && !layout.componentId ? { outline: '1px solid rgba(100,100,100,0.35)' } : {}),
-    // Prevent flex children from shrinking so percentage/vh heights are
-    // respected and scroll works. Declared BEFORE idmlStyle so a cell that sets
-    // its own flex (a `hug` child is flex: 1 1 0) keeps it — otherwise the hug
-    // could not shrink below its content and would push its siblings out.
+    // Prevent flex children from shrinking so percentage/vh heights are respected and scroll works
     flexShrink: 0,
     // Apply .idml inline styles (can override sizeStyle values, e.g. height: '30vh' for scroll pages)
     ...(layout.idmlStyle ?? {}),
@@ -173,6 +170,7 @@ export function LayoutRenderer({ layout, components }: LayoutRendererProps): Rea
       style={containerStyle}
       data-idml-node
       data-idml-id={editorMode && layout.nodeId ? layout.nodeId : undefined}
+      tabIndex={layout.tabIndex}
     >
       {boundComponent ? (
         <ComponentRenderer

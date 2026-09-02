@@ -16,6 +16,7 @@ export const UIConfigSchema = z
     tokens: TokensDefSchema,
     pages: z.array(PageDefSchema).min(1),
     darkStyles: z.array(DarkRuleSchema).optional(),
+    rootVars: z.record(z.string()).optional(),
     userComponents: z.array(z.string()).optional(),
   })
   .strict();

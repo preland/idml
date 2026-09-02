@@ -27,8 +27,26 @@ const BUTTON_BASE: React.CSSProperties = {
   fontSize: 'inherit',
 };
 
+// BUTTON_BASE's `border: none` leaves every border longhand at its initial
+// value, so an author's `borderWidth` lands on a button whose border-style is
+// still `none` and computes to 0 — the width is silently dead. Restore the
+// style whenever a width was asked for, so `borderWidth: 0.07vw` in a variant
+// draws the border the author wrote.
+const BORDER_WIDTH_PROPS = [
+  'borderWidth', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+] as const;
+
 const Button = ({ text, children, onClick, href, style, type = 'button', ...props }: ComponentProps) => {
-  const merged = { ...BUTTON_BASE, ...style };
+  const s = style as React.CSSProperties | undefined;
+  const wantsBorder = !!s && BORDER_WIDTH_PROPS.some((k) => s[k] != null);
+  // When the author asked for a border, drop the `border: none` reset rather
+  // than layering a style on top of it: the reset is a shorthand, so keeping it
+  // would also write an inline border-COLOR, and an inline colour beats the
+  // utility class (`border-blue-600`, `border-transparent`) meant to supply it.
+  const { border: _reset, ...borderless } = BUTTON_BASE;
+  const merged = wantsBorder
+    ? { ...borderless, borderStyle: 'solid', ...style }
+    : { ...BUTTON_BASE, ...style };
   // Render both the label and any slotted children (e.g. an icon placed inside
   // the button via `Button("Save", { Image(...) })`).
   const content = [text, children];
@@ -82,6 +100,167 @@ const Input = ({ type = 'text', value, onChange, onEnter, placeholder, name, dis
 
 const Textarea = ({ value, onChange, placeholder, name, rows, style, ...props }: ComponentProps) =>
   React.createElement('textarea', { value, onChange, placeholder, name, rows, style, ...props });
+
+/**
+ * A document-level keybinding. Renders nothing: `Hotkey("Escape", closeThing)`
+ * declares that a key runs a method, which is otherwise inexpressible — a
+ * handler in the DSL always hangs off an element the user has to reach with the
+ * pointer. `value` is the combination ("Escape", "Ctrl+Enter", "Meta+K"),
+ * matched case-insensitively against the event's key plus its modifiers.
+ */
+const Hotkey = ({ value, onClick }: ComponentProps) => {
+  const handlerRef = React.useRef(onClick);
+  handlerRef.current = onClick;
+  const combo = String(value ?? '');
+  React.useEffect(() => {
+    if (!combo) return;
+    const parts = combo.toLowerCase().split('+').map((s) => s.trim()).filter(Boolean);
+    const key = parts[parts.length - 1];
+    const needCtrl = parts.includes('ctrl');
+    const needShift = parts.includes('shift');
+    const needAlt = parts.includes('alt');
+    const needMeta = parts.includes('meta');
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== key) return;
+      // Ctrl and Meta are interchangeable so one binding covers both platforms.
+      if (needCtrl && !(e.ctrlKey || e.metaKey)) return;
+      if (needMeta && !(e.metaKey || e.ctrlKey)) return;
+      if (needShift !== e.shiftKey) return;
+      if (needAlt !== e.altKey) return;
+      if (!needCtrl && !needMeta && (e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      (handlerRef.current as ((ev: unknown) => void) | undefined)?.(e);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [combo]);
+  return null;
+};
+
+/**
+ * A continuous pointer gesture on the container it sits in. Renders nothing and
+ * takes no layout space — like `Hotkey`, it declares that an interaction runs a
+ * method, which the DSL otherwise cannot say: a handler in idml fires on click,
+ * and a drag or a wheel has no element to hang off.
+ *
+ * `Gesture("pan", onPan)` binds dragging, `"zoom"` the wheel, `"brush"` a
+ * drag that reports the span it covered. A modifier may be required for the
+ * wheel — `"zoom:ctrl"` leaves an unmodified wheel to scroll the page as usual.
+ * Several Gestures may sit in one container; each listens for its own event, so
+ * pan and zoom coexist without fighting over a layer.
+ *
+ * The handler receives the reading as its `event`, alongside the values and
+ * helpers every idml handler gets. Distances are reported BOTH in pixels and as
+ * a fraction of the container, because a caller almost always wants the
+ * fraction: on a timeline, `dxRatio` is the share of the visible span that was
+ * dragged, whatever the element's width happens to be.
+ */
+const GESTURE_MODIFIERS: Record<string, (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }) => boolean> = {
+  ctrl: (e) => e.ctrlKey || e.metaKey,
+  meta: (e) => e.metaKey || e.ctrlKey,
+  shift: (e) => e.shiftKey,
+  alt: (e) => e.altKey,
+};
+
+const Gesture = ({ value, onClick }: ComponentProps) => {
+  const markerRef = React.useRef<HTMLSpanElement | null>(null);
+  const handlerRef = React.useRef(onClick);
+  handlerRef.current = onClick;
+  const spec = String(value ?? 'pan');
+
+  React.useEffect(() => {
+    const [kindRaw, modRaw] = spec.toLowerCase().split(':');
+    const kind = kindRaw.trim();
+    const needMod = GESTURE_MODIFIERS[(modRaw ?? '').trim()];
+    // The cell idml builds for an out-of-flow node is `display: contents`, so it
+    // has no box to measure; step past those to the first ancestor that does.
+    // That container is what the gesture reads its distances against.
+    let host: HTMLElement | null = markerRef.current?.parentElement ?? null;
+    while (host && getComputedStyle(host).display === 'contents') host = host.parentElement;
+    if (!host) return;
+
+    const fire = (payload: Record<string, unknown>) =>
+      (handlerRef.current as ((ev: unknown) => void) | undefined)?.(payload);
+    const box = () => host!.getBoundingClientRect();
+    const cleanups: (() => void)[] = [];
+
+    if (kind === 'zoom') {
+      const onWheel = (e: WheelEvent) => {
+        if (needMod && !needMod(e)) return;
+        e.preventDefault();
+        const r = box();
+        fire({
+          gesture: 'zoom',
+          // >1 zooms in, <1 zooms out; the caller multiplies its span by it.
+          scale: e.deltaY < 0 ? 1 / 1.15 : 1.15,
+          deltaY: e.deltaY,
+          atRatio: r.width ? (e.clientX - r.left) / r.width : 0.5,
+          width: r.width,
+          height: r.height,
+        });
+      };
+      host.addEventListener('wheel', onWheel, { passive: false });
+      cleanups.push(() => host!.removeEventListener('wheel', onWheel));
+    }
+
+    if (kind === 'pan' || kind === 'brush') {
+      let origin: { x: number; y: number; r: DOMRect } | null = null;
+      let last = { x: 0, y: 0 };
+      const report = (e: PointerEvent, phase: string) => {
+        if (!origin) return;
+        const { r } = origin;
+        const from = kind === 'pan' ? last : { x: origin.x, y: origin.y };
+        const dx = e.clientX - from.x;
+        const dy = e.clientY - from.y;
+        fire({
+          gesture: kind,
+          phase,
+          dx,
+          dy,
+          dxRatio: r.width ? dx / r.width : 0,
+          dyRatio: r.height ? dy / r.height : 0,
+          fromRatio: r.width ? (origin.x - r.left) / r.width : 0,
+          toRatio: r.width ? (e.clientX - r.left) / r.width : 0,
+          width: r.width,
+          height: r.height,
+        });
+        last = { x: e.clientX, y: e.clientY };
+      };
+      const onDown = (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        if (needMod && !needMod(e)) return;
+        origin = { x: e.clientX, y: e.clientY, r: box() };
+        last = { x: e.clientX, y: e.clientY };
+        host!.setPointerCapture(e.pointerId);
+        fire({ gesture: kind, phase: 'start', dx: 0, dy: 0, dxRatio: 0, dyRatio: 0,
+               fromRatio: origin.r.width ? (e.clientX - origin.r.left) / origin.r.width : 0,
+               toRatio: origin.r.width ? (e.clientX - origin.r.left) / origin.r.width : 0,
+               width: origin.r.width, height: origin.r.height });
+      };
+      const onMove = (e: PointerEvent) => { if (origin) report(e, 'move'); };
+      const onUp = (e: PointerEvent) => {
+        if (!origin) return;
+        report(e, 'end');
+        try { host!.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+        origin = null;
+      };
+      host.addEventListener('pointerdown', onDown);
+      host.addEventListener('pointermove', onMove);
+      host.addEventListener('pointerup', onUp);
+      host.addEventListener('pointercancel', onUp);
+      cleanups.push(() => {
+        host!.removeEventListener('pointerdown', onDown);
+        host!.removeEventListener('pointermove', onMove);
+        host!.removeEventListener('pointerup', onUp);
+        host!.removeEventListener('pointercancel', onUp);
+      });
+    }
+
+    return () => cleanups.forEach((fn) => fn());
+  }, [spec]);
+
+  return React.createElement('span', { ref: markerRef, 'data-idml-gesture': spec, style: { display: 'none' } });
+};
 
 const Option = ({ value, label, children, ...props }: ComponentProps) =>
   React.createElement('option', { value, ...props }, label ?? children);
@@ -243,6 +422,7 @@ export const BUILTIN_COMPONENTS = {
   Table,
   Input,
   Textarea,
+  Hotkey,
   Select,
   Option,
   Checkbox,
@@ -253,4 +433,5 @@ export const BUILTIN_COMPONENTS = {
   Form,
   Modal,
   Embed,
+  Gesture,
 };

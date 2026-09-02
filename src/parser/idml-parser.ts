@@ -12,8 +12,16 @@ import type { PercentageString, DynamicSize, DynamicDim } from '../types/layout.
 type DimRef = { ref: string; whenTrue?: string; whenFalse?: string; live?: boolean };
 // `'auto'` is internal-only (table expansion uses it for content-height); the
 // parser rejects it as user input. `@ref` dims come from `parseDimension`.
-type DimValue = number | 'auto' | DimRef;
+// A bare parameter name in a `define` body's `[h,w]` field, bound to the number
+// the call site passed in that position. Lets one definition be sized by its
+// caller — e.g. a shared popup frame each page opens at its own dimensions.
+// Substituted away when the definition is expanded, so nothing downstream of
+// substituteParams ever sees one.
+type DimParam = { param: string };
+type DimValue = number | 'auto' | DimRef | DimParam;
 const isDimRef = (d: DimValue): d is DimRef => typeof d === 'object' && d !== null && 'ref' in d;
+const isDimParam = (d: DimValue): d is DimParam =>
+  typeof d === 'object' && d !== null && 'param' in d;
 
 /**
  * Content-sizing ("fit") flags. An element still declares its `[h,w]` percentage
@@ -56,6 +64,8 @@ interface ParsedItem {
   children: ParsedItem[];
   style: Record<string, string>;
   className?: string;
+  /** Set by the table expander so a truncated cell can take focus and expand. */
+  tabIndex?: number;
   /** Method ids referenced as `@x` tokens inside a class block — resolved per
    *  render (with the current row item) and appended to className. */
   classRefs?: string[];
@@ -116,6 +126,7 @@ type TokenType =
   | 'ROUTE'
   | 'IDENT'
   | 'NUMBER'
+  | 'PERCENT'
   | 'STRING'
   | 'COLOR'
   | 'COLON'
@@ -215,6 +226,7 @@ const SINGLE_CHAR_TOKENS: Record<string, TokenType> = {
   ':': 'COLON',
   '?': 'QUESTION',
   '!': 'BANG',
+  '%': 'PERCENT',
 };
 
 // Hard maximum line width. Lines longer than this are a parse error: long lines
@@ -381,10 +393,15 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
-    // Identifier — hyphenated keywords like `top-left`, and CSS values that begin
-    // with a hyphen such as vendor prefixes (`-webkit-box`, `-webkit-fill-available`).
-    // A leading `-` is only an identifier when a letter/underscore follows.
-    if (/[a-zA-Z_]/.test(stripped[i]) || (stripped[i] === '-' && /[a-zA-Z_]/.test(stripped[i + 1] ?? ''))) {
+    // Identifier — hyphenated keywords like `top-left`, CSS values that begin
+    // with a hyphen such as vendor prefixes (`-webkit-box`), and CSS custom
+    // property names (`--idml-radius`). A leading `-` is only an identifier when
+    // a letter/underscore follows it, or when it opens a `--` custom property.
+    if (
+      /[a-zA-Z_]/.test(stripped[i]) ||
+      (stripped[i] === '-' && /[a-zA-Z_]/.test(stripped[i + 1] ?? '')) ||
+      (stripped[i] === '-' && stripped[i + 1] === '-' && /[a-zA-Z_]/.test(stripped[i + 2] ?? ''))
+    ) {
       let j = i;
       while (j < stripped.length && /[\w-]/.test(stripped[j])) j++;
       tokens.push({ type: 'IDENT', value: stripped.slice(i, j), start: i, end: j });
@@ -473,6 +490,19 @@ function assertNoLayoutClasses(classStr: string, where: string): void {
 
 // ==================== STYLE PROP MAPPER ====================
 
+/**
+ * Units a style-block value may carry. The container-query units size a value
+ * against the nearest ancestor declaring `containerType`, which is how a string
+ * is pinned to a constant share of its own box rather than of the viewport —
+ * the one way for text to be immune to a text-scale multiplier. They are legal
+ * in a style block only; `parseDimLiteral` still rejects every unit, because a
+ * [height,width] field is always a percentage of the parent.
+ */
+const STYLE_UNITS = new Set([
+  'vh', 'vw', 'px', 'rem', 'em',
+  'cqw', 'cqh', 'cqi', 'cqb', 'cqmin', 'cqmax',
+]);
+
 function applyStyleProp(key: string, val: string, result: Record<string, string>): void {
   switch (key) {
     case 'bg':       result.backgroundColor = val; break;
@@ -516,7 +546,7 @@ const BUILTIN_NAMES = new Set([
   'Text', 'Heading', 'Button', 'Link', 'Image', 'List', 'Card', 'Divider', 'Spacer',
   'Icon', 'Table', 'Children', 'Row', 'Col', 'Repeat', 'Form', 'Modal', 'Column',
   'Overlay', 'Input', 'Textarea', 'Select', 'Option', 'Checkbox', 'Radio', 'Label',
-  'Embed',
+  'Embed', 'Hotkey', 'Gesture',
 ]);
 
 class IdmlParser {
@@ -543,6 +573,10 @@ class IdmlParser {
   // Dark-mode overrides from `dark { ... }` blocks (shared across imports, so a
   // block in styles.idml reaches every page that imports it). See parseDarkBlock.
   darkStyles: DarkRule[] = [];
+  /** `vars { }` declarations, emitted as one `:root` rule. Document-level (not
+   *  scoped to the page tree) so a portalled Modal sees them too. Shared with
+   *  imported files, like darkStyles. */
+  rootVars: Record<string, string> = {};
 
   constructor(tokens: Token[], fileName = '<entry>', trackSource = false) {
     this.tokens = tokens;
@@ -675,6 +709,7 @@ class IdmlParser {
     sub.defRegistry = this.defRegistry;
     sub.defParamRegistry = this.defParamRegistry;
     sub.darkStyles = this.darkStyles; // dark {} blocks propagate to importers
+    sub.rootVars = this.rootVars; // as do vars {} blocks
     sub.parseImports(resolve); // transitive imports
     sub.parseTopDecls();
 
@@ -702,6 +737,10 @@ class IdmlParser {
         this.parseDarkBlock();
         continue;
       }
+      if (t?.type === 'IDENT' && t.value === 'vars' && this.peek(1)?.type === 'LBRACE') {
+        this.parseVarsBlock();
+        continue;
+      }
       if (
         t?.type === 'IDENT' &&
         this.peek(1)?.type === 'COLON' &&
@@ -711,6 +750,25 @@ class IdmlParser {
         continue;
       }
       break;
+    }
+  }
+
+  // Consume `vars { --name: value ... }` — the CSS custom properties the whole
+  // UI is tuned by (one rounding amount, one hairline width, one control size).
+  // They live here rather than in a stylesheet so the values a designer changes
+  // sit beside the variants that spend them. Keys must be custom properties: a
+  // plain CSS prop here would have no element to apply to.
+  private parseVarsBlock(): void {
+    this.pos++; // consume 'vars'
+    const style = this.parseStyleDefBody();
+    for (const [k, v] of Object.entries(style)) {
+      if (!k.startsWith('--')) {
+        throw new Error(
+          `[idml] vars: '${k}' is not a CSS custom property — a vars block ` +
+            `declares '--name: value' tokens, not styles for an element`
+        );
+      }
+      this.rootVars[k] = v;
     }
   }
 
@@ -761,6 +819,22 @@ class IdmlParser {
     }
     this.inDefineBody = prevInDefine;
     this.consume('RBRACE');
+
+    const known = new Set(params);
+    const checkDims = (items: ParsedItem[]): void => {
+      for (const it of items) {
+        for (const [axis, dim] of [['height', it.height], ['width', it.width]] as const) {
+          if (isDimParam(dim) && !known.has(dim.param)) {
+            throw new Error(
+              `[idml] define ${name}: ${it.name}'s ${axis} names '${dim.param}', ` +
+                `which is not one of its parameters (${params.join(', ') || 'none'})`
+            );
+          }
+        }
+        checkDims(it.children);
+      }
+    };
+    checkDims(body);
 
     this.defRegistry.set(name, body);
     this.defParamRegistry.set(name, params);
@@ -842,9 +916,16 @@ class IdmlParser {
     if (t.type === 'NUMBER') {
       const n = this.consume('NUMBER').value as number;
       const next = this.peek();
-      if (next?.type === 'IDENT' && ['vh', 'vw', 'px', 'rem', 'em'].includes(next.value as string)) {
+      if (next?.type === 'IDENT' && STYLE_UNITS.has(next.value as string)) {
         this.pos++;
         return `${n}${next.value}`;
+      }
+      // A percentage is relative to the element's own container, so unlike `vw`
+      // it says nothing about the viewport — it is how a style block asks for
+      // "all of the space I am given" (e.g. minWidth: 100%).
+      if (next?.type === 'PERCENT') {
+        this.pos++;
+        return `${n}%`;
       }
       return String(n);
     }
@@ -1052,6 +1133,12 @@ class IdmlParser {
       }
       return { ref };
     }
+    // A bare identifier inside a `define` body names one of its parameters; the
+    // call site supplies the number. Outside a definition there is nothing to
+    // bind it to, so it stays an error there.
+    if (this.inDefineBody && this.peek()?.type === 'IDENT') {
+      return { param: this.consume('IDENT').value as string };
+    }
     return this.consume('NUMBER').value as number;
   }
 
@@ -1061,7 +1148,7 @@ class IdmlParser {
   private parseDimLiteral(): string {
     const n = this.consume('NUMBER').value as number;
     const next = this.peek();
-    if (next?.type === 'IDENT' && ['vw', 'vh', 'px', 'rem', 'em'].includes(next.value as string)) {
+    if (next?.type === 'IDENT' && STYLE_UNITS.has(next.value as string)) {
       throw new Error(
         `[idml] dimensions are percentages of the parent — the unit ` +
           `'${next.value}' is not allowed in a [height,width] field (write ` +
@@ -1265,8 +1352,22 @@ function substituteParams(item: ParsedItem, bindings: Map<string, IdmlArg>): Par
     }
     return a;
   };
+  const subDim = (d: DimValue, axis: string): DimValue => {
+    if (!isDimParam(d)) return d;
+    if (!bindings.has(d.param)) return d;
+    const bound = bindings.get(d.param);
+    if (typeof bound !== 'number') {
+      throw new Error(
+        `[idml] ${item.name}: the ${axis} parameter '${d.param}' was given ` +
+          `'${String(bound)}' — a [height,width] field takes a percentage number`
+      );
+    }
+    return bound;
+  };
   return {
     ...item,
+    height: subDim(item.height, 'height'),
+    width: subDim(item.width, 'width'),
     args: item.args.map(subArg),
     children: item.children.map(c => substituteParams(c, bindings)),
   };
@@ -1299,7 +1400,9 @@ function containerDirection(
  */
 /** Out-of-flow node types: portals / fixed layers. They don't occupy flow space,
  *  so they neither count toward a parent's tiling sum nor must fill the cross axis. */
-const OUT_OF_FLOW = new Set(['Overlay', 'Modal']);
+// Nodes that occupy no flow space. Overlay/Modal portal away; `Hotkey` renders
+// nothing at all — it is a keybinding, not a box.
+const OUT_OF_FLOW = new Set(['Overlay', 'Modal', 'Hotkey', 'Gesture']);
 
 /**
  * A definition is itself out-of-flow when its body renders only out-of-flow
@@ -1356,9 +1459,11 @@ function validateTiling(
 
   // Cross axis: every child fills it (100%), unless it `fill`s (stretch to the
   // line), `fit`s the cross axis (natural size within its declared max), or the
-  // dim is a runtime `@ref` (author-guaranteed).
+  // dim is a runtime `@ref` / a `define` parameter — neither is known here, so
+  // both are author-guaranteed.
   for (const c of children) {
-    if (!c.fill?.[crossKey] && !c.fit?.[crossKey] && !isDimRef(c[cross]) && (c[cross] as number) !== 100) {
+    if (!c.fill?.[crossKey] && !c.fit?.[crossKey] && !isDimRef(c[cross]) &&
+        !isDimParam(c[cross]) && (c[cross] as number) !== 100) {
       throw new Error(
         `[idml] ${c.name} in ${where}: cross-axis ${cross} must be 100 ` +
           `(got ${c[cross]}); no vacant space is allowed`
@@ -1366,9 +1471,10 @@ function validateTiling(
     }
   }
 
-  // A runtime `@ref` main dim can't be summed statically — trust the author to
-  // tile at runtime (e.g. sidebar + content widths that swap on collapse).
-  if (children.some((c) => isDimRef(c[main]))) return;
+  // A runtime `@ref` main dim (or one a call site supplies) can't be summed
+  // statically — trust the author to tile at runtime (e.g. sidebar + content
+  // widths that swap on collapse).
+  if (children.some((c) => isDimRef(c[main]) || isDimParam(c[main]))) return;
 
   // Main axis — the exact-fill invariant. Every child either RESERVES a fixed
   // main-% (a plain dim, or a `fit` whose % is its capped max — it draws smaller
@@ -1674,6 +1780,39 @@ function mkItem(
 }
 
 /**
+ * Build one table cell whose horizontal whitespace is SPENDABLE. The gutters are
+ * flex siblings of the content rather than `padding`, because padding never
+ * participates in flex shrinking: a cell with fixed padding can only truncate its
+ * text, however much empty space sits beside it. Carrying a large shrink factor,
+ * the gutters absorb nearly all of any width deficit first and collapse to zero
+ * before the content gives — so a strained column loses whitespace, then text.
+ */
+function mkCell(
+  col: ParsedItem,
+  children: ParsedItem[],
+  padY: string,
+  bodyClass?: string
+): ParsedItem {
+  const gutter = (): ParsedItem =>
+    mkItem('Col', [], 'auto', 'auto', 'top-left', [], {
+      flexGrow: '0', flexShrink: '1000', flexBasis: '1.6vw', minWidth: '0',
+    });
+  const body = mkItem('Col', [], 'auto', 'auto', col.anchor, children, {
+    flexGrow: '1', flexShrink: '1', flexBasis: 'auto', minWidth: '0',
+  });
+  body.className = ['idml-cell-body', bodyClass].filter(Boolean).join(' ');
+  const cell = mkItem('Row', [], 'auto', col.width, col.anchor, [gutter(), body, gutter()], {
+    paddingTop: padY, paddingBottom: padY,
+    // Shrinkable so a FOCUSED sibling can claim room from this cell. Harmless at
+    // rest: column widths already sum to 100%, so there is no deficit to absorb
+    // until one cell asks to expand.
+    flexShrink: '1', minWidth: '0',
+  });
+  cell.className = 'idml-cell';
+  return cell;
+}
+
+/**
  * Expand `Table(@data){ Column("H"){ cell } ... }` into existing primitives: a
  * header Row of column labels, then a Repeat over `@data` whose template is a Row
  * of one cell per column. Cell templates use `@item.field` and resolve per row via
@@ -1696,10 +1835,7 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     );
     label.className = 'font-medium text-gray-500 uppercase tracking-wider';
     // Cell padding is vw (not px-6/py-3) so the table is zoom-invariant.
-    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, [label], {
-      paddingLeft: '1.6vw', paddingRight: '1.6vw', paddingTop: '0.8vw', paddingBottom: '0.8vw',
-    });
-    return cell;
+    return mkCell(col, [label], '0.8vw');
   });
   const headerRow = mkItem('Row', [], 'auto', 100, 'top-left', headerCells, {
     borderBottom: '0.07vw solid #e5e7eb',
@@ -1709,10 +1845,8 @@ function expandTable(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
   // Body cells carry the same horizontal padding and a comfortable vertical
   // rhythm; rows are separated by a light divider.
   const bodyCells = columns.map(col => {
-    const cell = mkItem('Col', [], 'auto', col.width, col.anchor, col.children, {
-      paddingLeft: '1.6vw', paddingRight: '1.6vw', paddingTop: '1vw', paddingBottom: '1vw',
-    });
-    cell.className = 'whitespace-nowrap';
+    const cell = mkCell(col, col.children, '1vw', 'whitespace-nowrap');
+    cell.tabIndex = 0;
     return cell;
   });
   const bodyRowTemplate = mkItem('Row', [], 'auto', 100, 'top-left', bodyCells, {
@@ -1938,12 +2072,22 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
     // to make a card fill a stretched wrapper while its fields still pack at top.
     const mainFit = direction === 'column' ? item.fit?.h : item.fit?.w;
     const mainFill = direction === 'column' ? item.fill?.h : item.fill?.w;
+    // Dropping the size alone is not enough for a `fit` LEAF: it also carries a
+    // `max-*: <declared>%` cap (see the hug cell in convertComponent). Inside a
+    // content-flow parent that cap is self-limiting — the parent shrink-wraps to
+    // its children, so the child is capped at a share of the width it itself
+    // produced, and it can never reach the space the parent actually has. Drop
+    // the cap the parser generated (matched by value, so an authored `maxWidth:`
+    // escape hatch survives) and let the leaf take its natural size.
     if (mainFit || mainFill) {
-      for (const ch of children) {
-        if (!ch.size) continue;
-        if (direction === 'column') delete ch.size.height;
-        else delete ch.size.width;
-      }
+      const sizeKey = direction === 'column' ? 'height' : 'width';
+      const maxKey = direction === 'column' ? 'maxHeight' : 'maxWidth';
+      item.children.forEach((pc, i) => {
+        const ch = children[i];
+        if (ch.size) delete ch.size[sizeKey];
+        const generatedCap = typeof pc[sizeKey] === 'number' ? `${pc[sizeKey]}%` : undefined;
+        if (generatedCap && ch.idmlStyle?.[maxKey] === generatedCap) delete ch.idmlStyle[maxKey];
+      });
     }
     // A `grow` child flex-grows to fill the leftover main-axis space.
     item.children.forEach((pc, i) => { if (pc.hug) applyHug(children[i], direction); });
@@ -1961,6 +2105,7 @@ function convertNode(item: ParsedItem, ctx: ConvertCtx): LayoutDef {
       children,
       idmlStyle: containerStyle,
       ...(item.className ? { className: item.className } : {}),
+      ...(item.tabIndex !== undefined ? { tabIndex: item.tabIndex } : {}),
     };
   }
 
@@ -2057,7 +2202,19 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
   // fit styles win over anchor defaults and variant styles so the component
   // actually shrinks to content (overriding the renderer's default fill).
   const fit = item.fit ? fitStyles(item.fit) : {};
-  const merged = { ...anchorStyle, ...item.style, ...fit };
+  // A Modal portals its panel out of the cell the layout built for it, so that
+  // cell's `[h,w]` would size a box nobody ever sees and the panel would be left
+  // at whatever its class/style block said. Put the dims on the panel itself —
+  // it sits in a viewport-sized backdrop, so they read as percentages of the
+  // viewport. An explicit width/height in the style block still wins.
+  const modalSize: Record<string, string> =
+    item.name === 'Modal'
+      ? {
+          ...(typeof item.height === 'number' ? { height: `${item.height}%` } : {}),
+          ...(typeof item.width === 'number' ? { width: `${item.width}%` } : {}),
+        }
+      : {};
+  const merged = { ...anchorStyle, ...modalSize, ...item.style, ...fit };
   const idmlStyle = Object.keys(merged).length ? merged : undefined;
 
   // Classify call args. `@x` -> reactive value binding; a bare identifier -> a
@@ -2100,7 +2257,11 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
     // `~@path` — same two-way model wiring, but `methodId` is a value-ref path whose
     // resolved value is the form-state KEY (see useBoundProps' dynamicKey branch).
     ...dynModelRefs.map(methodId => ({ prop: primaryProp, methodId, kind: 'model' as const, dynamicKey: true })),
-    ...handlerRefs.map(methodId => ({ prop: handlerProp, methodId })),
+    // The first handler is the element's primary action; a SECOND one is its
+    // double-click. That is the only way the DSL can express "single click and
+    // double click do different things" — e.g. a help marker that reveals its
+    // text on hover and opens an editor on double-click.
+    ...handlerRefs.map((methodId, i) => ({ prop: i === 0 ? handlerProp : 'onDoubleClick', methodId })),
     // Dynamic classes (`@method` tokens in a class block) resolve to strings that
     // are appended to className per render.
     ...(item.classRefs ?? []).map(methodId => ({ prop: 'className', methodId, kind: 'value' as const })),
@@ -2182,6 +2343,17 @@ function buildComponentDef(item: ParsedItem, id: string): ComponentDef {
         type: item.name,
         props: first != null ? { placeholder: String(first) } : {},
         idmlStyle,
+      });
+
+    // A keybinding: arg0 is the combination, and it is the whole of the node —
+    // name it `value` so the builtin reads it the same way whether it is a
+    // literal ("Escape") or a `@method` ref.
+    case 'Hotkey':
+    case 'Gesture':
+      return withBindings({
+        id,
+        type: item.name,
+        props: first != null ? { value: String(first) } : {},
       });
 
     default:
@@ -2349,6 +2521,7 @@ function parseIdmlCore(
 
   const config: UIConfig = { version: '1', tokens: DEFAULT_TOKENS, pages };
   if (parser.darkStyles.length > 0) config.darkStyles = parser.darkStyles;
+  if (Object.keys(parser.rootVars).length > 0) config.rootVars = parser.rootVars;
 
   // Variant table with usage counts (source-tracking only) — how many rendered
   // components use each styled variant, so the editor can say "used by N areas"

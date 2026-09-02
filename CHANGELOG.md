@@ -3,6 +3,80 @@
 All notable changes to `idml-ui` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) (pre-1.0: breaking changes bump the minor).
 
+## 0.4.0
+
+### Added
+
+- **`vars { }` block.** Declares the CSS custom properties the UI is tuned by
+  (`vars { --idml-radius: 0.3vw }`) beside the variants that spend them, rather
+  than in a stylesheet the DSL cannot see. Compiled to one document-level
+  `:root` rule, so a portalled `Modal` inherits them too. A non-custom-property
+  key is a parse error.
+
+- **`Gesture` builtin.** `Gesture("pan", onPan)` binds a drag, `"zoom"` the
+  wheel, `"brush"` a drag that reports the span it covered — interactions the
+  DSL previously could not express, since a handler only ever fired on click.
+  Renders nothing and takes no layout space, like `Hotkey`. Distances are
+  reported in pixels *and* as a fraction of the container. `"zoom:ctrl"` requires
+  a modifier so an unmodified wheel still scrolls the page.
+
+- **`Hotkey` builtin, and a double-click handler.** `Hotkey("Escape", close)`
+  binds a document-level key to a method; Ctrl and Meta are interchangeable so
+  one binding covers both platforms. A *second* handler argument now binds to
+  `onDoubleClick`.
+
+- **Dimension parameters on a `define`.** A bare parameter name in a definition
+  body's `[height,width]` binds to the number the call site passed, so one
+  definition can be opened at each caller's own size. Naming a non-parameter, or
+  binding a non-number to one, is a parse error.
+
+- **Percentages in a style block.** `minWidth: 100%` is now expressible; a `%` in
+  a `[height,width]` field is still rejected, since those numbers already are
+  percentages.
+
+- **Container-query units for font sizes.** A `fontSize` authored in `cqw`/`cqh`
+  is pinned to its own box, and the scale-bench multiplier leaves it alone — such
+  a size has already declared itself a fraction of its container.
+
+- **`scale-bench` (`tools/scale-bench`).** Loads a page across viewport x scale x
+  text-volume, detects truncation, clipping, overlap and sub-legible text, and
+  fails against a saved baseline. Two gates: relative (`safeScale`) and absolute
+  (`require`).
+
+- **`ConfigRenderer` accepts `initialFormValues`** to seed the form scope.
+
+### Changed
+
+- **A `Modal` is sized by its own `[h,w]`.** The panel portals out of the cell
+  the layout built for it, so those percentages now land on the panel itself and
+  read against the viewport-sized backdrop. Previously they sized a box nobody
+  saw. An explicit `width`/`height` in the style block still wins. *Existing
+  modals will change size.*
+
+- **A `Checkbox` or `Radio` keeps its intrinsic width.** The renderer's blanket
+  `width: 100%` stretched a fixed square into a rectangle. Its cell still
+  reserves the declared `[h,w]`.
+
+- **Table cells spend whitespace before truncating.** Cell gutters are flex
+  siblings carrying a large shrink factor, so the browser gives up padding first,
+  per-column and on demand, and only truncates once the gutters hit zero. A
+  truncated cell reveals its full content on focus (no React state, no JS).
+  Measured on the changelog page at 1920x1080: 15 -> 5 breaking elements at
+  1.25x, 28 -> 15 at 1.5x. Resting layout unchanged.
+
+### Fixed
+
+- **`Button` `borderWidth` actually draws.** `BUTTON_BASE`'s `border: none` left
+  border-style at `none`, so an authored width computed to 0 and the border never
+  appeared.
+
+- **No self-limiting `%`-cap on a `fit` leaf in a content-flow parent.** The cap
+  was a share of the width the child itself produced, so it could never reach the
+  space the parent actually had. An authored raw-CSS `maxWidth` still survives.
+
+- **`LayoutRenderer` no longer discards an authored `flexShrink`** — the default
+  now sits above the spread, not below it.
+
 ## 0.3.0
 
 ### Added

@@ -1,0 +1,29 @@
+{
+  "baseUrl": "https://localhost:3000",
+  "settleMs": 1200,
+  "timeoutMs": 45000,
+  "ladder": [0.5, 0.625, 0.75, 0.875, 1.0, 1.25, 1.5, 1.75, 2.0],
+  "volumes": [0.5, 0.75, 1.0, 1.5, 2.0],
+  "matrixMetric": "total",
+  "require": {
+    "scale": [0.5, 2.0],
+    "maxBreaking": 0
+  },
+  "thresholds": {
+    "minFontPx": 10,
+    "overlapRatio": 0.03,
+    "overlapAreaPx": 4
+  },
+  "viewports": [
+    { "label": "16x9-640x360", "w": 640, "h": 360 },
+    { "label": "16x9-960x540", "w": 960, "h": 540 },
+    { "label": "16x9-1280x720", "w": 1280, "h": 720 },
+    { "label": "16x9-1600x900", "w": 1600, "h": 900 },
+    { "label": "16x9-1920x1080", "w": 1920, "h": 1080 },
+    { "label": "16x9-2560x1440", "w": 2560, "h": 1440 },
+    { "label": "16x9-3840x2160", "w": 3840, "h": 2160 }
+  ],
+  "targets": [
+    { "name": "changelog", "path": "/admin/changelog" }
+  ]
+}
