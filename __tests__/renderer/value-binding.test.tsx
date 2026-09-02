@@ -46,3 +46,37 @@ describe('reactive value bindings', () => {
     expect(await screen.findByText('second')).toBeInTheDocument();
   });
 });
+
+describe('a Checkbox keeps its intrinsic width', () => {
+  it('does not stretch a Checkbox to its cell', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Checkbox(~agree)[100,100,center-left]{}
+}
+`);
+    const { container } = render(
+      <ConfigProvider config={cfg} methods={[]}>
+        <ConfigRenderer page="/p" />
+      </ConfigProvider>
+    );
+    const box = container.querySelector('input[type=checkbox]') as HTMLInputElement;
+    expect(box.style.width).toBe('');
+  });
+
+  it('still stretches a Button to its cell', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Button("Go", noop)[100,100,center-left]{}
+}
+`);
+    const { container } = render(
+      <ConfigProvider config={cfg} methods={[{ id: 'noop', fn: () => {} }]}>
+        <ConfigRenderer page="/p" />
+      </ConfigProvider>
+    );
+    const btn = container.querySelector('button') as HTMLButtonElement;
+    expect(btn.style.width).toBe('100%');
+  });
+});

@@ -187,6 +187,61 @@ Text("b")[10,100,top-left]{}
     ).not.toThrow();
   });
 
+  it('drops a fit leaf’s generated %-cap so it can reach the space the parent has', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Row()[100,100,center-left,fit-w] {
+Text("a name that will not fit")[100,45,center-left,fit-w]{}
+Text("•")[100,10,center,fit-w]{}
+Text("role")[100,45,center-left,fit-w]{}
+}
+}
+`);
+    const row = cfg.pages[0].layout.children[0].children[0];
+    // The container shrink-wraps to its children, so a `max-width: 45%` on a
+    // child is a share of the width that child itself produced — it can never
+    // grow into the room the row actually has. The cap must be gone.
+    for (const cell of row.children) {
+      expect(cell.idmlStyle?.width).toBe('fit-content');
+      expect(cell.idmlStyle?.maxWidth).toBeUndefined();
+    }
+  });
+
+  it('keeps the %-cap when the parent has a definite main axis', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Row()[100,100,center-left] {
+Text("a name that will not fit")[100,45,center-left,fit-w]{}
+Text("•")[100,10,center,fit-w]{}
+Text("role")[100,45,center-left,fit-w]{}
+}
+}
+`);
+    const row = cfg.pages[0].layout.children[0].children[0];
+    expect(row.children.map((c: { idmlStyle?: Record<string, string> }) => c.idmlStyle?.maxWidth))
+      .toEqual(['45%', '10%', '45%']);
+  });
+
+  it('leaves an authored maxWidth alone in a content-flow parent', () => {
+    const cfg = parseIdml(`
+./p
+Capped:Col { maxWidth: 20vw }
+Col()[100,100,top-left] {
+Row()[100,100,center-left,fit-w] {
+Capped()[100,100,center-left] {
+Text("a name that will not fit")[100,100,center-left]{}
+}
+}
+}
+`);
+    const row = cfg.pages[0].layout.children[0].children[0];
+    // Only the cap the parser generated (`<declared>%`) is dropped — a raw-CSS
+    // maxWidth the author wrote is a deliberate constraint and must survive.
+    expect(row.children[0].idmlStyle?.maxWidth).toBe('20vw');
+  });
+
   it('still enforces strict tiling for ordinary (definite) containers', () => {
     expect(() =>
       parseIdml(`

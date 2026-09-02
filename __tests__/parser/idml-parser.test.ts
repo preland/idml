@@ -641,3 +641,108 @@ Neg()[100,100,top-left]{}
     expect(node.idmlStyle?.marginTop).toBe('-0.5vw');
   });
 });
+
+describe('handlers — a second handler is the double-click', () => {
+  it('binds handler #1 to the primary action and #2 to onDoubleClick', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Button("Help", showHint, editHint)[100,100,top-left]{}
+}
+`);
+    const btn = cfg.pages[0].components.find((c) => c.type === 'Button');
+    expect(btn?.bindings).toEqual([
+      { prop: 'onClick', methodId: 'showHint' },
+      { prop: 'onDoubleClick', methodId: 'editHint' },
+    ]);
+  });
+
+  it('leaves a single handler on the primary action', () => {
+    const cfg = parseIdml(`
+./p
+Col()[100,100,top-left] {
+Button("Save", save)[100,100,top-left]{}
+}
+`);
+    const btn = cfg.pages[0].components.find((c) => c.type === 'Button');
+    expect(btn?.bindings).toEqual([{ prop: 'onClick', methodId: 'save' }]);
+  });
+});
+
+describe('percentages in a style block', () => {
+  it('accepts a % value', () => {
+    const node = parseIdml(`
+Wide:Row { minWidth: 100% maxWidth: 50% }
+./home
+Wide()[100,100,top-left]{}
+`).pages[0].layout.children[0];
+    expect(node.idmlStyle?.minWidth).toBe('100%');
+    expect(node.idmlStyle?.maxWidth).toBe('50%');
+  });
+
+  it('still rejects a % in a [height,width] field', () => {
+    expect(() => parseIdml(`
+./home
+Col()[100%,100,top-left]{}
+`)).toThrow();
+  });
+});
+
+describe('dimension parameters — a define sized by its caller', () => {
+  const src = (call: string) => `
+./p
+${call}
+`;
+  const withDef = (body: string) => `
+define Box(h, w) {
+  Col()[h,w,top-left] {
+    Text("x")[100,100,top-left]{}
+  }
+}
+${body}`;
+
+  it('binds a bare identifier dim to the number the call site passed', () => {
+    const cfg = parseIdml(withDef(src('Box(40, 25)[100,100,top-left]{}')));
+    const inner = cfg.pages[0].layout.children[0].children![0];
+    expect(inner.size).toEqual({ height: '40%', width: '25%' });
+  });
+
+  it('lets two call sites size the same define differently', () => {
+    const cfg = parseIdml(
+      withDef(`
+./p
+Col()[100,100,top-left] {
+  Box(30, 100)[50,100,top-left]{}
+  Box(70, 100)[50,100,top-left]{}
+}
+`)
+    );
+    const [a, b] = cfg.pages[0].layout.children[0].children!;
+    expect(a.children![0].size?.height).toBe('30%');
+    expect(b.children![0].size?.height).toBe('70%');
+  });
+
+  it('rejects a dim naming something that is not a parameter', () => {
+    expect(() =>
+      parseIdml(`
+define Box(h) {
+  Col()[h,w,top-left] {
+    Text("x")[100,100,top-left]{}
+  }
+}
+./p
+Box(40)[100,100,top-left]{}
+`)
+    ).toThrow(/not one of its parameters/);
+  });
+
+  it('rejects a non-numeric argument bound to a dim parameter', () => {
+    expect(() => parseIdml(withDef(src('Box("tall", 25)[100,100,top-left]{}')))).toThrow(
+      /takes a percentage number/
+    );
+  });
+
+  it('still rejects a bare identifier dim outside a define', () => {
+    expect(() => parseIdml(src('Col()[h,100,top-left]{}'))).toThrow();
+  });
+});
