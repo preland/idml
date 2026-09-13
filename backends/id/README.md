@@ -66,7 +66,7 @@ The backend is an `id` project (`src/`), a wide shallow tree of tiny functions
 
 | stage | files | what it does |
 | --- | --- | --- |
-| **read** | `src/io` | slurp the `.idml` from stdin; a `slice` (substring) helper |
+| **read** | `src/io` | slurp the `.idml` from stdin (substrings come from idstd's `str_slice`) |
 | **lex** | `src/lex` | one pass → a token stream (idents, numbers, strings, `#rrggbb` colours, class-strings, punctuation). Handles idml comments, `#hex` colours (via a hex-lookahead), and backtick class-strings |
 | **parse + layout** | `src/parse` | recursive descent over the layout tree (`Name(args)[h,w,align] { … }`). Layout is **fused into the parse**: each node's pixel rect is computed from its parent's rect and the node's percentage header, so no AST is stored — exactly the shape id's constraints favour |
 | **render** | `src/parse/paint*`, `src/gfx` | fill each node's rect into an `int[]` framebuffer (`0xRRGGBB`); dump it as a P3 PPM. The `gfx/` framebuffer + PPM code is vendored from `id_development/nativeapp` |

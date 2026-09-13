@@ -4,7 +4,7 @@ read_hash(int i) {
   int r = read_comment(i);
   int next_char = charat((import src), i + 1);
   if(is_hex(next_char)) {
-    string tok_str = slice((import src), i, i + 7);
+    string tok_str = hash_text(i);
     push_tok(4, tok_str);
     r = i + 7;
   }

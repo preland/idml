@@ -1,0 +1,8 @@
+// A colour token's text at i. Only src[i+1] is known to be hex, so a colour cut
+// short by the end of the document takes the bytes that are there instead of
+// reading past the end.
+hash_text(int i) {
+  int left_v = len((import src)) - i;
+  int n = fx_min(7, left_v);
+  string tok_str = str_slice((import src), i, n);
+} return string tok_str;
