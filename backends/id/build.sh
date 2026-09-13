@@ -19,4 +19,6 @@ if [[ ! -x "$IDC" ]]; then
   exit 1
 fi
 
-exec "$IDC" "$HERE/src" -o "$HERE/idml-id"
+# --allow-untested: src/ has no test cases yet, and the compiler requires two
+# per function by default. The flag is deprecated and goes once they exist.
+exec "$IDC" "$HERE/src" --allow-untested -o "$HERE/idml-id"
