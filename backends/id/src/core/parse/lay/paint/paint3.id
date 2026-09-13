@@ -2,7 +2,7 @@
 // 6px and vertically centred in the node's box; fg colour, or black if none.
 put_text(int x, int y, int h) {
   int color = label_color();
-  draw_text(x + 6, y + (h - 16) / 2, (import ptext)[0], color, 2);
+  txt_g8_draw(x + 6, y + (h - 16) / 2, (import ptext)[0], color, 2);
 } return void;
 
 label_color() {
