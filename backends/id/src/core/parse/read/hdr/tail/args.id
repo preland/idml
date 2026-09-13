@@ -2,14 +2,16 @@
 // literal as the node's text label (e.g. Title("id . todo") or AddBtn("Add")).
 scan_args() {
   while(cur_is("[") == 0) {
-    grab(pos());
+    int i = pos();
+    grab(i);
   }
 } return void;
 
 grab(int i) {
   int r = 0;
   if(kind_at(i) == 3) {
-    set_ptext(text_at(i));
+    string t = text_at(i);
+    set_ptext(t);
   }
   adv();
 } return void;

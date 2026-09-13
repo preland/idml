@@ -1,0 +1,13 @@
+read_ident_tail(int i, int j, int c) {
+  while(ident_cont(c)) {
+    j = j + 1;
+    c = charat((import src), j);
+  }
+  int result = read_ident_tail2(i, j);
+} return int result;
+
+read_ident_tail2(int i, int j) {
+  string s = slice((import src), i, j);
+  push_tok(1, s);
+  int result = j;
+} return int result;

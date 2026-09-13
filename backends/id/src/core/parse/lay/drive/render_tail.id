@@ -1,0 +1,5 @@
+render_tail(int root) {
+  scan_defs(root);
+  cur_init(root);
+  process_root();
+} return void;

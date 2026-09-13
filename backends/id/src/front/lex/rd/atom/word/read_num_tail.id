@@ -1,0 +1,13 @@
+read_num_tail(int i, int j, int c) {
+  while(chr_is_digit(c)) {
+    j = j + 1;
+    c = charat((import src), j);
+  }
+  int result = read_num_tail2(i, j);
+} return int result;
+
+read_num_tail2(int i, int j) {
+  string s = slice((import src), i, j);
+  push_tok(2, s);
+  int result = j;
+} return int result;

@@ -2,12 +2,15 @@
 // six hex digits (id has no bitwise ops; base-16 accumulation gives the value
 // directly). Lowercase/decimal digits; see README for the hex-case note.
 parse_color(string s) {
-} return int hex_acc(s, 1, 0);
+  int result = hex_acc(s, 1, 0);
+} return int result;
 
 hex_acc(string s, int i, int acc) {
   int r = acc;
   if(i < 7) {
-    r = hex_acc(s, i + 1, acc * 16 + hexval(charat(s, i)));
+    int c = charat(s, i);
+    int hv = hexval(c);
+    r = hex_acc(s, i + 1, acc * 16 + hv);
   }
 } return int r;
 

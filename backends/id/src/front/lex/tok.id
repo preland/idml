@@ -12,4 +12,5 @@ push_tok(int k, string t) {
 } return void;
 
 tok_count() {
-} return int len((import tok_kind));
+  int result = len((import tok_kind));
+} return int result;

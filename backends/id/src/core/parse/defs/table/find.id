@@ -1,6 +1,7 @@
 // Index of a definition by name, or -1. Recurses the parallel name list.
 def_idx(string name) {
-} return int find_name(name, 0);
+  int result = find_name(name, 0);
+} return int result;
 
 find_name(string name, int i) {
   int r = 0 - 1;

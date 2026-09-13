@@ -1,0 +1,5 @@
+kid_step_tail(int x, int y, int dir, int off, int cw, int ch) {
+  place(x, y, dir, off, cw, ch);
+  int m = main_of(dir, cw, ch);
+  int result = off + m;
+} return int result;

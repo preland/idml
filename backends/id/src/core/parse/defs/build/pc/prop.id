@@ -9,6 +9,8 @@ is_prop(int i, string key) {
 other_prop(int i) {
   int r = 0;
   if(is_prop(i, "fg")) {
-    set_last_fg(parse_color(text_at(i + 2)));
+    string text2 = text_at(i + 2);
+    int color = parse_color(text2);
+    set_last_fg(color);
   }
 } return void;

@@ -1,0 +1,5 @@
+read_two_tail2(int dir, string t) {
+  int hh = to_int(t);
+  int ww = next_num();
+  end_hdr(dir, hh, ww);
+} return void;

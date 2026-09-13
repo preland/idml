@@ -5,10 +5,12 @@
 draw_text(int x, int y, string s, int c, int scale) {
   int i = 0;
   while(i < len(s)) {
-    draw_glyph(x + i * 8 * scale, y, charat(s, i), c, scale);
+    int ch = charat(s, i);
+    draw_glyph(x + i * 8 * scale, y, ch, c, scale);
     i = i + 1;
   }
 } return void;
 
 text_width(string s, int scale) {
-} return int len(s) * 8 * scale;
+  int result = len(s) * 8 * scale;
+} return int result;

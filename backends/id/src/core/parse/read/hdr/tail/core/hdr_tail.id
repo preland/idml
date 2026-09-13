@@ -1,0 +1,16 @@
+read_hdr_tail(int p) {
+  string t = text_at(p);
+  int bg = bg_of(t);
+  read_hdr_tail2(t, bg);
+} return void;
+
+read_hdr_tail2(string t, int bg) {
+  int fg = fg_of(t);
+  read_hdr_tail3(t, bg, fg);
+} return void;
+
+read_hdr_tail3(string t, int bg, int fg) {
+  set_pend(bg, fg);
+  int dir = dir_of(t);
+  skip_hdr(dir);
+} return void;

@@ -12,11 +12,11 @@ kids(int x, int y, int w, int h, int dir, int off) {
 kid_step(int x, int y, int w, int h, int dir, int off) {
   int cw = child_w(dir, w);
   int ch = child_h(dir, h);
-  place(x, y, dir, off, cw, ch);
-} return int off + main_of(dir, cw, ch);
+  int result = kid_step_tail(x, y, dir, off, cw, ch);
+} return int result;
 
 place(int x, int y, int dir, int off, int cw, int ch) {
   int cx = x + row_off(dir, off);
   int cy = y + col_off(dir, off);
-  process(cx, cy, cw, ch, hd_dir());
+  place_tail(cx, cy, cw, ch);
 } return void;

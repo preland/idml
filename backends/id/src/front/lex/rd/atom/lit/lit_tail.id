@@ -1,0 +1,17 @@
+read_str_tail(int i, int j) {
+  string inner = slice((import src), i + 1, j);
+  push_tok(3, inner);
+  int result = j + 1;
+} return int result;
+
+read_btick_tail(int i, int j) {
+  string inner = slice((import src), i + 1, j);
+  push_tok(6, inner);
+  int result = j + 1;
+} return int result;
+
+read_punct_tail(int i, int c) {
+  string ch_str = chr(c);
+  push_tok(5, ch_str);
+  int result = i + 1;
+} return int result;

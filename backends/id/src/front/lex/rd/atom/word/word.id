@@ -1,0 +1,17 @@
+// Identifiers (letter-start, then letter/digit/-/_, so `top-left` and `slot-add`
+// are single tokens) and decimal integer literals.
+read_ident(int i) {
+  int j = i;
+  int c = charat((import src), j);
+  int result = read_ident_tail(i, j, c);
+} return int result;
+
+ident_cont(int c) {
+  int result = is_alpha(c) || chr_is_digit(c) || c == 45;
+} return int result;
+
+read_num(int i) {
+  int j = i;
+  int c = charat((import src), j);
+  int result = read_num_tail(i, j, c);
+} return int result;

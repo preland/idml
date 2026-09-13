@@ -1,9 +1,8 @@
 // One token position: if it starts a `Name : Kind` definition, register it; if
 // it starts a `bg:`/`fg:` colour property, record it on the current definition.
 handle_def(int i) {
-  int r = 0;
   if(is_def_start(i)) {
-    def_add(text_at(i), text_at(i + 2) == "Row");
+    handle_def_tail(i);
   }
 } return void;
 
@@ -17,7 +16,9 @@ is_def_start(int i) {
 handle_prop(int i) {
   int r = 0;
   if(is_prop(i, "bg")) {
-    set_last_bg(parse_color(text_at(i + 2)));
+    string text2 = text_at(i + 2);
+    int color = parse_color(text2);
+    set_last_bg(color);
   } else {
     other_prop(i);
   }

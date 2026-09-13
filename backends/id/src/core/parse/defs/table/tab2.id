@@ -6,9 +6,11 @@ def_add2() {
 } return void;
 
 set_last_bg(int c) {
-  lset((import dbg), len((import dbg)) - 1, c);
+  int idx = len((import dbg)) - 1;
+  lset((import dbg), idx, c);
 } return void;
 
 set_last_fg(int c) {
-  lset((import dfg), len((import dfg)) - 1, c);
+  int idx = len((import dfg)) - 1;
+  lset((import dfg), idx, c);
 } return void;

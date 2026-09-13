@@ -15,4 +15,5 @@ draw_label(int x, int y, int w, int h) {
 } return void;
 
 has_text() {
-} return int len((import ptext)[0]) > 0;
+  int result = len((import ptext)[0]) > 0;
+} return int result;

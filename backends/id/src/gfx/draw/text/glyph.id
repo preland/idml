@@ -10,12 +10,14 @@ glyph_row(int code, int row) {
   if(code < 32 || code > 126) {
     cc = 32;
   }
-} return int (import glyphs)[(cc - 32) * 8 + row];
+  int result = (import glyphs)[(cc - 32) * 8 + row];
+} return int result;
 
 draw_glyph(int x, int y, int code, int c, int scale) {
   int row = 0;
   while(row < 8) {
-    glyph_grow(x, y + row * scale, glyph_row(code, row), c, scale);
+    int gr = glyph_row(code, row);
+    glyph_grow(x, y + row * scale, gr, c, scale);
     row = row + 1;
   }
 } return void;
