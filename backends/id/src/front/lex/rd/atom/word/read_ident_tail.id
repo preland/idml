@@ -7,7 +7,7 @@ read_ident_tail(int i, int j, int c) {
 } return int result;
 
 read_ident_tail2(int i, int j) {
-  string s = slice((import src), i, j);
+  string s = str_slice((import src), i, j - i);
   push_tok(1, s);
   int result = j;
 } return int result;
