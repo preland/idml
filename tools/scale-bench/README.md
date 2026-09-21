@@ -109,10 +109,10 @@ Scaling it would contradict the declaration — the reason to write a size that
 way is that the string must keep one share of its container whatever the user's
 setting.
 
-This is how `BrandText` in `the app's styles.idml` is sized. It is the app's
-name rather than content, it is the widest fixed string in the narrowest box on
-the page, and pinning it moved the safe window from 1.1× to 1.4× on every page
-that shows the sidebar. The cost is real and deliberate: that one label does not
+A sidebar brand label is the usual case: it is the app's name rather than
+content, and it is often the widest fixed string in the narrowest box on the
+page. Pinning one such label has been measured to move the safe window from
+1.1× to 1.4× on every page that shows the sidebar. The cost is real and deliberate: that one label does not
 grow for a user who raises their text size. Reach for this only where the string
 is chrome, never for content.
 
@@ -145,8 +145,9 @@ loop resumes. `--report` rebuilds the report and re-runs the gates from
 
 There are two independent gates, and they answer different questions.
 
-**Did anything get worse?** `baseline.json` is committed and holds the windows as
-measured today. The `npm run scale-bench` script compares against it and exits
+**Did anything get worse?** `baseline.json` holds the windows as measured today.
+It is not committed — a baseline describes one app's pages, so it belongs beside
+that app, not in this repo. The `npm run scale-bench` script compares against it and exits
 non-zero if any page's window narrowed, naming the cells that moved. Only cells
 present in both runs are compared, so `--target x` still gates correctly.
 Re-record it once a change is a deliberate improvement:
@@ -171,7 +172,7 @@ reaches 1.3×: set it on a page once you have fixed it, and it stays fixed.
 
 | flag | meaning |
 | --- | --- |
-| `--config <file>` | config JSON (default `scale-bench.config.json`) |
+| `--config <file>` | config JSON (default `scale-bench.config.json`, falling back to `scale-bench.config.example.json`) |
 | `--base-url <url>` | override the config's `baseUrl` |
 | `--out <dir>` | output directory (default `tools/scale-bench/out`) |
 | `--target <a,b>` | only these targets |
@@ -212,7 +213,7 @@ the bench is not driving.
 
 ## Non-deterministic pages
 
-`graph` and `explore` lay out differently on every load — a force
+A page with a force-directed graph or a map lays out differently on every load — a force
 simulation and a map — so a single sample flaps between adjacent ladder steps
 and the gate cries wolf. Sampling a target several times and keeping the
 pessimistic result makes the recorded window a floor rather than a coin toss:

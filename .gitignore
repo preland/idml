@@ -10,3 +10,7 @@ ui.config.schema.json
 testthing/
 *.idml
 tools/scale-bench/out*/
+tools/scale-bench/scale-bench.config.json
+tools/scale-bench/scale-bench.*.json
+tools/scale-bench/baseline*.json
+!tools/scale-bench/scale-bench.config.example.json

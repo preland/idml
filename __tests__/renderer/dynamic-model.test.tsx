@@ -36,15 +36,15 @@ Button("dump", dump)[10,100,top-left]{}
     expect(inputs).toHaveLength(2);
 
     fireEvent.change(inputs[0], { target: { value: 'Alice' } });
-    fireEvent.change(inputs[1], { target: { value: 'Smith' } });
+    fireEvent.change(inputs[1], { target: { value: 'Nguyen' } });
 
     // Controlled read-back: each input reflects its own dynamic cell.
     expect(inputs[0].value).toBe('Alice');
-    expect(inputs[1].value).toBe('Smith');
+    expect(inputs[1].value).toBe('Nguyen');
 
     // And the writes landed under the row-derived keys, not a literal "item.key".
     fireEvent.click(screen.getByRole('button'));
-    expect(captured).toEqual({ firstName: 'Alice', surname: 'Smith' });
+    expect(captured).toEqual({ firstName: 'Alice', surname: 'Nguyen' });
   });
 
   it('shares a cell when two dynamic inputs resolve to the same key', async () => {

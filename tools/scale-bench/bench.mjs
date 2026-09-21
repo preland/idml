@@ -55,7 +55,8 @@ scale-bench
 
   node tools/scale-bench/bench.mjs [options]
 
-  --config <file>       config JSON (default tools/scale-bench/scale-bench.config.json)
+  --config <file>       config JSON (default tools/scale-bench/scale-bench.config.json,
+                        falling back to scale-bench.config.example.json)
   --base-url <url>      override the config's baseUrl
   --out <dir>           output directory (default tools/scale-bench/out)
   --target <a,b>        only these targets
@@ -76,7 +77,8 @@ scale-bench
   process.exit(0);
 }
 
-const configPath = resolve(args.config || join(HERE, 'scale-bench.config.json'));
+let configPath = resolve(args.config || join(HERE, 'scale-bench.config.json'));
+if (!args.config && !existsSync(configPath)) configPath = join(HERE, 'scale-bench.config.example.json');
 if (!existsSync(configPath)) {
   console.error(`no config at ${configPath}`);
   process.exit(2);
@@ -382,6 +384,10 @@ async function sweep() {
       : (args.tolerance !== undefined ? Number(args.tolerance) : (cfg.tolerance || 0));
   };
 
+  if (args.baseline && !existsSync(resolve(args.baseline))) {
+    console.error(`no baseline at ${resolve(args.baseline)} -- record one with --save-baseline`);
+    process.exit(2);
+  }
   if (args.baseline) {
     const prev = JSON.parse(readFileSync(resolve(args.baseline), 'utf8'));
     const key = (c) => `${c.target}|${c.viewport.label}|${c.volume}`;
