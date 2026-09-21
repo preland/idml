@@ -3,8 +3,8 @@
 // and capture its text label from the args; the first two numbers inside `[ ]`
 // are its height% and width%.
 read_hdr() {
-  set_pend(bg_of(text_at(pos())), fg_of(text_at(pos())));
-  skip_hdr(dir_of(text_at(pos())));
+  int p = pos();
+  read_hdr_tail(p);
 } return void;
 
 skip_hdr(int dir) {

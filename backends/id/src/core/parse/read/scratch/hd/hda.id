@@ -1,9 +1,12 @@
 // Accessors for the parsed header scratch (hd.id).
 hd_dir() {
-} return int (import hd)[0];
+  int result = (import hd)[0];
+} return int result;
 
 hd_h() {
-} return int (import hd)[1];
+  int result = (import hd)[1];
+} return int result;
 
 hd_w() {
-} return int (import hd)[2];
+  int result = (import hd)[2];
+} return int result;

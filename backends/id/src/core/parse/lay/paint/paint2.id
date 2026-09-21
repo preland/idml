@@ -3,7 +3,7 @@
 fill_bg(int x, int y, int w, int h, int bg) {
   int r = 0;
   if(bg >= 0) {
-    fill_rect(x, y, w, h, bg);
+    d2_l_rect(x, y, w, h, bg);
   }
 } return void;
 
@@ -15,4 +15,5 @@ draw_label(int x, int y, int w, int h) {
 } return void;
 
 has_text() {
-} return int len((import ptext)[0]) > 0;
+  int result = len((import ptext)[0]) > 0;
+} return int result;

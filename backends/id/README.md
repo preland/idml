@@ -66,10 +66,10 @@ The backend is an `id` project (`src/`), a wide shallow tree of tiny functions
 
 | stage | files | what it does |
 | --- | --- | --- |
-| **read** | `src/io` | slurp the `.idml` from stdin; a `slice` (substring) helper |
+| **read** | `src/io` | slurp the `.idml` from stdin (substrings come from idstd's `str_slice`) |
 | **lex** | `src/lex` | one pass → a token stream (idents, numbers, strings, `#rrggbb` colours, class-strings, punctuation). Handles idml comments, `#hex` colours (via a hex-lookahead), and backtick class-strings |
 | **parse + layout** | `src/parse` | recursive descent over the layout tree (`Name(args)[h,w,align] { … }`). Layout is **fused into the parse**: each node's pixel rect is computed from its parent's rect and the node's percentage header, so no AST is stored — exactly the shape id's constraints favour |
-| **render** | `src/parse/paint*`, `src/gfx` | fill each node's rect into an `int[]` framebuffer (`0xRRGGBB`); dump it as a P3 PPM. The `gfx/` framebuffer + PPM code is vendored from `id_development/nativeapp` |
+| **render** | `src/parse/paint*` | fill each node's rect into an `int[]` framebuffer (`0xRRGGBB`); dump it as a P3 PPM. The framebuffer, rectangle, font and PPM code is idstd's `gfx/` (`sf_l_*`, `d2_l_rect`, `txt_g8_draw`, `ppm_l_dump`); it was vendored here from `id_nativeapp` until both copies moved into the library |
 
 The layout rule matches idml's plain-percentage exact-fill and the reference
 resolver (`nativeapp/scripts/build-scene.mjs`): in a **Col**, each child's
@@ -98,8 +98,7 @@ that previously required Node (`build-scene.mjs` imports idml's **TypeScript**
   `Row`/`Col`) and **real colours** (each node fills with its `bg`; built-ins,
   spacers, and text-only nodes are transparent).
 - **Text**: a node's first string argument is drawn as a label in its `fg`
-  colour, via a pure-`id` 8×8 bitmap font (vendored from
-  `id_development/nativeapp/gfx/draw/text`).
+  colour, via idstd's pure-`id` 8×8 bitmap face (`txt_g8_draw`).
 - `#` line comments, `#rrggbb` colours (hex-lookahead disambiguates from
   comments), backtick class-strings.
 

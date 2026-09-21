@@ -1,9 +1,14 @@
 // Read the token at an index, and test the current token's text.
 kind_at(int i) {
-} return int (import tok_kind)[i];
+  int result = (import tok_kind)[i];
+} return int result;
 
 text_at(int i) {
-} return string (import tok_text)[i];
+  string res = (import tok_text)[i];
+} return string res;
 
 cur_is(string s) {
-} return int text_at(pos()) == s;
+  int p = pos();
+  string t = text_at(p);
+  int result = t == s;
+} return int result;

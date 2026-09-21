@@ -1,0 +1,20 @@
+// Advance to the next numeric token (skipping the comma) and return its value.
+next_num() {
+  goto_num();
+  int result = next_num_tail();
+} return int result;
+
+next_num_tail() {
+  int p = pos();
+  string t = text_at(p);
+  int result = to_int(t);
+} return int result;
+
+goto_num() {
+  adv();
+  int p = pos();
+  while(kind_at(p) != 2) {
+    adv();
+    p = pos();
+  }
+} return void;

@@ -5,8 +5,10 @@ cur_init(int start) {
 } return void;
 
 pos() {
-} return int (import pc)[0];
+  int result = (import pc)[0];
+} return int result;
 
 adv() {
-  lset((import pc), 0, pos() + 1);
+  int p = pos();
+  lset((import pc), 0, p + 1);
 } return void;

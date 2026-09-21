@@ -2,8 +2,10 @@
 // We peek the next char: hex -> colour token, otherwise skip to end of line.
 read_hash(int i) {
   int r = read_comment(i);
-  if(is_hex(charat((import src), i + 1))) {
-    push_tok(4, slice((import src), i, i + 7));
+  int next_char = charat((import src), i + 1);
+  if(is_hex(next_char)) {
+    string tok_str = hash_text(i);
+    push_tok(4, tok_str);
     r = i + 7;
   }
 } return int r;
@@ -16,4 +18,5 @@ read_comment(int i) {
 } return int j;
 
 is_hex(int c) {
-} return int is_digit(c) || (c >= 97 && c <= 102) || (c >= 65 && c <= 70);
+  int result = chr_is_digit(c) || (c >= 97 && c <= 102) || (c >= 65 && c <= 70);
+} return int result;

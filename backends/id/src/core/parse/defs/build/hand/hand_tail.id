@@ -1,0 +1,10 @@
+handle_def_tail(int i) {
+  string text0 = text_at(i);
+  string text2 = text_at(i + 2);
+  handle_def_tail2(text0, text2);
+} return void;
+
+handle_def_tail2(string text0, string text2) {
+  int is_row = text2 == "Row";
+  def_add(text0, is_row);
+} return void;

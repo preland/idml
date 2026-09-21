@@ -3,7 +3,7 @@
 // defaulting the cursor to i+1; each stepper handles one class then defers.
 step(int i, int c) {
   int r = i + 1;
-  if(is_space(c) == 0) {
+  if(chr_is_space(c) == 0) {
     r = step_b(i, c);
   }
 } return int r;

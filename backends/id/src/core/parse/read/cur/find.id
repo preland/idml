@@ -17,4 +17,7 @@ scan_root2(int i) {
 } return int r;
 
 is_marker(int i) {
-} return int text_at(i) == "." && text_at(i + 1) == "/";
+  string t1 = text_at(i);
+  string t2 = text_at(i + 1);
+  int result = t1 == "." && t2 == "/";
+} return int result;

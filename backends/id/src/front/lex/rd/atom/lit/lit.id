@@ -5,17 +5,18 @@ read_str(int i) {
   while(j < len((import src)) && charat((import src), j) != 34) {
     j = j + 1;
   }
-  push_tok(3, slice((import src), i + 1, j));
-} return int j + 1;
+  int result = read_str_tail(i, j);
+} return int result;
 
 read_btick(int i) {
   int j = i + 1;
   while(j < len((import src)) && charat((import src), j) != 96) {
     j = j + 1;
   }
-  push_tok(6, slice((import src), i + 1, j));
-} return int j + 1;
+  int result = read_btick_tail(i, j);
+} return int result;
 
 read_punct(int i) {
-  push_tok(5, chr(charat((import src), i)));
-} return int i + 1;
+  int c = charat((import src), i);
+  int result = read_punct_tail(i, c);
+} return int result;

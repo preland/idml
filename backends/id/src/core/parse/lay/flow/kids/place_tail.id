@@ -1,0 +1,4 @@
+place_tail(int cx, int cy, int cw, int ch) {
+  int dir_v = hd_dir();
+  process(cx, cy, cw, ch, dir_v);
+} return void;

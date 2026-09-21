@@ -1,0 +1,5 @@
+go_tail(int argc, string[] argv, int m) {
+  set_mode(m);
+  render();
+  finish(argc, argv);
+} return void;

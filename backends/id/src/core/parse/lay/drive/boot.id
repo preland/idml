@@ -1,8 +1,8 @@
 // One-time state setup: the framebuffer, the bitmap font, the header scratch,
 // the pending colour/text scratch, and the render/-rects mode flag.
 init_all() {
-  fb_init(640, 460);
-  font_data();
+  sf_l_init(640, 460);
+  txt_g8_init();
   init_rest();
 } return void;
 

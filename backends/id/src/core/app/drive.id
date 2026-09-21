@@ -9,6 +9,6 @@ mode_of(int argc, string[] argv) {
 finish(int argc, string[] argv) {
   int r = 0;
   if((import mode)[0] == 0) {
-    dump_ppm();
+    ppm_l_dump();
   }
 } return void;

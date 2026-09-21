@@ -1,14 +1,14 @@
 // Drive the resolve+render: build the definition table, position the cursor at
 // the page root, read its header, and process it filling the whole window.
 render() {
-  scan_defs(scan_root(0));
-  cur_init(scan_root(0));
-  process_root();
+  int root = scan_root(0);
+  render_tail(root);
 } return void;
 
 process_root() {
   read_hdr();
-  process(0, 0, 640, 460, hd_dir());
+  int dir = hd_dir();
+  process(0, 0, 640, 460, dir);
 } return void;
 
 set_mode(int m) {

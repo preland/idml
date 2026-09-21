@@ -1,7 +1,7 @@
 // Dispatch, continued: number, then string, then class-string, else punctuation.
 step_d(int i, int c) {
   int r = i;
-  if(is_digit(c)) {
+  if(chr_is_digit(c)) {
     r = read_num(i);
   } else {
     r = step_e(i, c);

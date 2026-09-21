@@ -13,7 +13,6 @@ prep() {
 } return void;
 
 go(int argc, string[] argv) {
-  set_mode(mode_of(argc, argv));
-  render();
-  finish(argc, argv);
+  int m = mode_of(argc, argv);
+  go_tail(argc, argv, m);
 } return void;
