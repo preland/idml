@@ -1,6 +1,8 @@
 # ============================================================================
-# Recreation of the app's app/admin/users/page.tsx, authored declaratively in the
-# .idml DSL at the test route ./test/users.
+# A generic user-administration page authored declaratively in the .idml DSL at
+# the test route ./test/users. It is a language sample, not any app's screen:
+# it exists to exercise defines, tables, modals and two-way binding in one
+# document.
 #
 # Written in the tightened DSL: comments only in this header; every element has
 # explicit percentage dimensions that tile its container to 100% (no vacant
@@ -76,10 +78,10 @@ define UserFields() {
   UserField()[34,100,top-left] {
     FieldLabel("Role")[30,100,top-left]{}
     FieldSelect(~role)[70,100,top-left] {
-      Option("Commenter")[100,100,top-left]{}
-      Option("Researcher")[100,100,top-left]{}
-      Option("SeniorResearcher")[100,100,top-left]{}
-      Option("Approver")[100,100,top-left]{}
+      Option("Viewer")[100,100,top-left]{}
+      Option("Editor")[100,100,top-left]{}
+      Option("Manager")[100,100,top-left]{}
+      Option("Reviewer")[100,100,top-left]{}
       Option("Admin")[100,100,top-left]{}
       Option("Disabled")[100,100,top-left]{}
     }

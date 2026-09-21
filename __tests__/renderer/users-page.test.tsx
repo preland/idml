@@ -7,14 +7,15 @@ import { ConfigProvider, ConfigRenderer } from '../../src/renderer';
 import { parseIdml } from '../../src/parser/idml-parser';
 
 // The page is a real .idml artifact at the test route ./test/users (vitest runs
-// from the project root, so resolve against cwd).
+// from the project root, so resolve against cwd). It is a generic sample
+// document -- it must not name any app that happens to consume idml.
 const SOURCE = readFileSync(resolve(process.cwd(), 'test-users-page.idml'), 'utf-8');
 
 type Helpers = { set: (n: string, v: unknown) => void; item?: any };
 
 const USERS = [
   { id: 1, name: 'Alice', email: 'alice@x.com', role: 'Admin' },
-  { id: 2, name: 'Bob', email: 'bob@x.com', role: 'Researcher' },
+  { id: 2, name: 'Bob', email: 'bob@x.com', role: 'Editor' },
 ];
 
 function renderPage() {
@@ -51,7 +52,7 @@ function renderPage() {
   return { created, updated };
 }
 
-describe('the app Users page (recreated in .idml)', () => {
+describe('user-administration page (authored in .idml)', () => {
   it('parses to the test route', () => {
     const config = parseIdml(SOURCE);
     expect(config.pages[0].route).toBe('/test/users');
@@ -78,7 +79,7 @@ describe('the app Users page (recreated in .idml)', () => {
     expect(screen.getByText('bob@x.com')).toBeInTheDocument();
     // Role badges (one per row)
     expect(screen.getByText('Admin')).toBeInTheDocument();
-    expect(screen.getByText('Researcher')).toBeInTheDocument();
+    expect(screen.getByText('Editor')).toBeInTheDocument();
     // One Edit button per row
     expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2);
   });
@@ -99,7 +100,7 @@ describe('the app Users page (recreated in .idml)', () => {
     const select = modal.querySelector('select') as HTMLSelectElement;
     const optionValues = Array.from(select.options).map((o) => o.value);
     expect(optionValues).toEqual(
-      expect.arrayContaining(['Commenter', 'Researcher', 'Admin', 'Disabled'])
+      expect.arrayContaining(['Viewer', 'Editor', 'Admin', 'Disabled'])
     );
   });
 
