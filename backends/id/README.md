@@ -28,10 +28,17 @@ The only tool required is the `id` compiler (`bin/idc`) from an
 ID_REPO=~/git/id_development ./build.sh          # -> ./idml-id (native binary)
 
 # id has no file-open builtin, so a document is piped in on stdin:
-cat examples/todo.idml        | ./idml-id          > frame.ppm   # render to a PPM image
-cat examples/stress-test.idml | ./idml-id          > stress.ppm  # the diagnostic (below)
-cat examples/todo.idml        | ./idml-id --rects                # print resolved x y w h rects
-magick frame.ppm frame.png                                       # (optional) PPM -> PNG
+cat your.idml | ./idml-id            > frame.ppm   # render to a PPM image
+cat your.idml | ./idml-id --rects                  # print resolved x y w h rects
+magick frame.ppm frame.png                         # (optional) PPM -> PNG
+```
+
+The repo carries no `.idml` files — the root `.gitignore` excludes them, so a
+document is yours to supply. `verify.sh` therefore emits its own three fixtures
+rather than reading any; ask it for one if you want a document to start from:
+
+```sh
+./verify.sh --emit stress > stress.idml      # also: --emit todo, --emit demo
 ```
 
 The backend builds under **both** id compilers — `bin/idc` (primary) and the
@@ -39,10 +46,11 @@ strict reference `idc.py` — so the whole `src/` tree honours id's rule-of-3
 (≤3 functions/file, ≤3 actions/block, ≤3 entries/directory).
 
 `./verify.sh` builds and checks everything headlessly (no display needed): the
-demo layout's exact geometry, a full `todo.idml` render, and the **stress test**
-checked pixel-by-pixel.
+demo layout's exact geometry, a full todo render, and the **stress test**
+checked pixel-by-pixel. It needs nothing but the compiler — the documents it
+asserts against are written into the script itself.
 
-### The stress test — `examples/stress-test.idml`
+### The stress test — `--emit stress`
 
 A single `.idml` that renders correctly **only if every feature works**, so it
 doubles as a smoke test for a fresh build. Each region targets one feature:

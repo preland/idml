@@ -27,10 +27,11 @@ mutable code or data between backends:
 - **The npm tarball is unaffected.** `package.json`'s `files` is `["dist",
   "ui.config.schema.json"]` — only the default backend's build. Adding
   `backends/c/` changes nothing about what publishes.
-- **Each backend owns its fixtures.** The default backend's example/test `.idml`
-  files live at the repo root + `__tests__`; the id backend's live in
-  `backends/id/examples/`. Nothing is a shared fixture, so no backend edits a
-  file another depends on.
+- **Each backend owns its fixtures, and carries them.** The root `.gitignore`
+  excludes `*.idml`, so a fixture kept as a file is one a fresh clone does not
+  have: the default backend builds its documents in `__tests__`, the id backend
+  writes its three into `verify.sh` itself. Nothing is a shared fixture, so no
+  backend edits a file another depends on.
 - **Each backend owns its build + verification.** The default backend uses
   `tsup` + `vitest`; the id backend uses `build.sh` + `verify.sh` (the id
   compiler). A new backend brings its own — it does not touch the others'.
@@ -63,8 +64,9 @@ the grammar's practical references are the two existing parsers.
 2. Implement: read `.idml` → parse → resolve exact-fill layout → render for your
    target. (See `backends/id/` for a worked example: lex → recursive-descent
    parse with layout fused in → framebuffer.)
-3. Add `examples/` and a `verify.sh` (or equivalent) that checks a known input
-   against known output, headlessly if possible.
+3. Add a `verify.sh` (or equivalent) that checks a known input against known
+   output, headlessly if possible. Carry the input inside it — `*.idml` is
+   gitignored, so a fixture on disk will not survive a clone.
 4. Do **not** edit `src/`, other backends, `package.json`, or the build config.
 5. Document your supported subset and decisions (see `backends/id/README.md` +
    `DECISIONS.md`).

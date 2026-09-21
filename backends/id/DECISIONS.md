@@ -66,8 +66,9 @@ Percentages resolve with round-to-nearest (`(v*pct+50)/100`) to match
 Colours-from-`define`, `define`-aware direction, and text rendering — first
 deferred to land a working core — are now implemented and verified (a real
 palette from the `define` block, direction from each node's base kind, and an
-8×8 bitmap-font label per node). The `examples/stress-test.idml` diagnostic
-exercises all of them and `verify.sh` asserts the result pixel-by-pixel.
+8×8 bitmap-font label per node). The stress-test diagnostic (`verify.sh
+--emit stress`) exercises all of them and `verify.sh` asserts the result
+pixel-by-pixel.
 
 During this the whole `src/` tree was restructured into a strict rule-of-3
 directory tree so it builds under **both** `bin/idc` and the reference `idc.py`
