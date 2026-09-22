@@ -124,10 +124,13 @@ npm run scale-bench -- --target changelog        # one page
 npm run scale-bench -- --shots all               # screenshot every step
 ```
 
-Writes `out/report.html` (a clickable matrix — every cell opens the screenshot
-and the findings behind it), `out/results.json`, and `out/shots/`.
+Writes `report.html` (a clickable matrix — every cell opens the screenshot and
+the findings behind it), `results.json`, and `shots/` into the output directory.
+That directory defaults to `~/.cache/scale-bench`, **outside this repo** — the
+renders are pictures of the app under test, which is not necessarily public.
+Pin it per-project with `"outDir"` in the config, or `--out`.
 
-A cell is appended to `out/results.json` the moment it finishes, and cells
+A cell is appended to `results.json` the moment it finishes, and cells
 already recorded are skipped, so an invocation does a chunk of the plan rather
 than all of it. `--limit` is that chunk, counted in page loads (default 8,
 about 25 seconds); when work remains the exit code is **3** and the gates are
@@ -174,7 +177,7 @@ reaches 1.3×: set it on a page once you have fixed it, and it stays fixed.
 | --- | --- |
 | `--config <file>` | config JSON (default `scale-bench.config.json`, falling back to `scale-bench.config.example.json`) |
 | `--base-url <url>` | override the config's `baseUrl` |
-| `--out <dir>` | output directory (default `tools/scale-bench/out`) |
+| `--out <dir>` | output directory. Default order: config `outDir`, `$SCALE_BENCH_OUT`, `$XDG_CACHE_HOME/scale-bench`, `~/.cache/scale-bench` — never inside this repo |
 | `--target <a,b>` | only these targets |
 | `--viewport <a,b>` | only these viewport labels |
 | `--shots all\|none` | screenshot every ladder step, or none (default: 1.0×, first breaking step, 2.0×) |

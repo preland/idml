@@ -15,6 +15,7 @@ import puppeteer from 'puppeteer-core';
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { renderReport } from './report.mjs';
 
@@ -58,11 +59,14 @@ scale-bench
   --config <file>       config JSON (default tools/scale-bench/scale-bench.config.json,
                         falling back to scale-bench.config.example.json)
   --base-url <url>      override the config's baseUrl
-  --out <dir>           output directory (default tools/scale-bench/out)
+  --out <dir>           output directory. Default, in order: config "outDir",
+                        $SCALE_BENCH_OUT, $XDG_CACHE_HOME/scale-bench,
+                        ~/.cache/scale-bench. Never inside this repo by default --
+                        the renders belong to the app under test, not to idml.
   --target <a,b>        only these targets
   --viewport <a,b>      only these viewport labels
   --limit <n>           page loads per invocation (default 8; 0 = no limit). Cells are
-                        resumed from out/results.json, so repeat until it stops
+                        resumed from the output dir's results.json, so repeat until it stops
                         exiting 3. Keeps any one run short enough to debug.
   --fresh               discard recorded cells and start the plan over
   --report              rebuild the report and re-run the gates, no browser
@@ -86,7 +90,13 @@ if (!existsSync(configPath)) {
 const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
 if (args.baseUrl) cfg.baseUrl = args.baseUrl;
 
-const outDir = resolve(args.out || join(HERE, 'out'));
+// Screenshots of whatever app is being measured default OUTSIDE this repo: the
+// renders belong to the app, not to idml, and idml is public.
+const cacheRoot = process.env.SCALE_BENCH_OUT
+  || (process.env.XDG_CACHE_HOME && join(process.env.XDG_CACHE_HOME, 'scale-bench'))
+  || (homedir() && join(homedir(), '.cache', 'scale-bench'))
+  || join(tmpdir(), 'scale-bench');
+const outDir = resolve(args.out || cfg.outDir || cacheRoot);
 const shotDir = join(outDir, 'shots');
 
 const only = (val, list) => !val || String(val).split(',').includes(list);
